@@ -1,10 +1,12 @@
 # context-memory plugin for Claude Code
 
-Persistent knowledge base for Claude Code sessions. Automatically retrieves relevant prior context before every prompt and exposes MCP tools for saving, searching, and voting on contexts.
+Persistent knowledge base for Claude Code sessions. Automatically retrieves relevant prior context before every prompt and exposes MCP tools for saving, searching, voting on, and auditing contexts.
 
 ## What it gives you
 
-- **MCP tools** for saving/searching/voting on contexts (`save_context`, `search_contexts`, `get_context`, `delete_context`, `vote_context`)
+- **MCP tools** for managing contexts:
+  - **Save and search**: `save_context`, `search_contexts`, `get_context`, `delete_context`, `vote_context`
+  - **Audit and cull**: `list_contexts` (paginated, filterable by type, repo, score, age, staleness), `bulk_delete_contexts`, `mark_context_verified`
 - **Pre-fetch hook** that searches your context store on every prompt and injects the top hits as additional context for Claude
 - **End-of-turn nudge** (v0.3.0+) that holds the turn open if meaningful work happened (commits, PRs, issue ops, several edits) without a `save_context` or `vote_context` call, so learnings actually land in the store instead of getting lost
 
