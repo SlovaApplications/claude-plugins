@@ -1,0 +1,22 @@
+{
+  "name": "context-memory",
+  "version": "0.1.0",
+  "description": "Persistent knowledge base for Claude Code — automatic context retrieval on every prompt",
+  "author": {
+    "name": "Slova Applications",
+    "email": "support@slova.app"
+  },
+  "homepage": "https://context-memory.slova.app",
+  "repository": "https://github.com/SlovaApplications/claude-plugins",
+  "license": "MIT",
+  "keywords": ["memory", "context", "knowledge-base", "mcp"],
+  "mcpServers": {
+    "context-memory": {
+      "type": "http",
+      "url": "${CONTEXT_MEMORY_API_URL:-https://api.context-memory.slova.app}/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${CONTEXT_MEMORY_API_KEY}"
+      }
+    }
+  }
+}

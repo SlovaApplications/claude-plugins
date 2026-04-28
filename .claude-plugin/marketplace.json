@@ -1,0 +1,22 @@
+{
+  "name": "slova",
+  "owner": {
+    "name": "Slova Applications",
+    "email": "support@slova.app"
+  },
+  "metadata": {
+    "description": "Slova Applications plugin marketplace"
+  },
+  "plugins": [
+    {
+      "name": "context-memory",
+      "source": "./plugins/context-memory",
+      "description": "Persistent knowledge base — automatic context retrieval and saving for Claude Code sessions",
+      "homepage": "https://context-memory.slova.app",
+      "repository": "https://github.com/SlovaApplications/claude-plugins",
+      "license": "MIT",
+      "keywords": ["memory", "context", "knowledge-base", "mcp"],
+      "category": "productivity"
+    }
+  ]
+}
