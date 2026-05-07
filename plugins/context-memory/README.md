@@ -40,7 +40,7 @@ All configuration is via environment variables (read at MCP-server-start time an
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CONTEXT_MEMORY_API_KEY` | _(required)_ | Bearer token from your dashboard. If unset, the hook stays silent and the MCP server fails to load. |
-| `CONTEXT_MEMORY_API_URL` | `https://api.context-memory.slova.app` | Override for self-hosted or staging backends. |
+| `CONTEXT_MEMORY_API_URL` | `https://api.context-memory.slova.app` | Override to point at a staging or local development backend. |
 | `CONTEXT_MEMORY_PREFETCH_TIMEOUT` | `1.5` | Seconds to wait for the search API before giving up. |
 | `CONTEXT_MEMORY_PREFETCH_LIMIT` | `5` | Max contexts injected per prompt. |
 | `CONTEXT_MEMORY_PREFETCH_MAX_BYTES` | `2000` | Hard cap on injected text size. |
