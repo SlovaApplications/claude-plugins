@@ -105,11 +105,12 @@ EOF
 fi
 
 # Any other non-2xx: fail open. Server errors and rate limits should not
-# block the user's prompt.
-case "$HTTP_STATUS" in
-  2*) ;;
-  *)  exit 0 ;;
-esac
+# block the user's prompt. Use numeric comparison so a non-numeric status
+# (shouldn't happen with curl's %{http_code}, but defensive) is treated as
+# a failure rather than silently coerced.
+if ! [ "$HTTP_STATUS" -ge 200 ] 2>/dev/null || [ "$HTTP_STATUS" -ge 300 ]; then
+  exit 0
+fi
 
 [ -n "$RESPONSE" ] || exit 0
 
