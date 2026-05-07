@@ -33,11 +33,13 @@ MEANINGFUL=0
 
 if printf '%s' "$TOOL_USES" \
   | grep -E '"name":"Bash"' \
-  | grep -qE 'git commit|gh pr create|gh pr merge|gh issue close|gh issue create|gh issue comment'; then
+  | grep -qE 'git commit[ "]|gh pr create[ "]|gh pr merge[ "]|gh issue close[ "]|gh issue create[ "]|gh issue comment[ "]'; then
   MEANINGFUL=1
 fi
 
-EDIT_COUNT="$(printf '%s' "$TOOL_USES" | grep -cE '"name":"(Edit|Write|NotebookEdit)"' 2>/dev/null)"
+# Count occurrences (not lines) — an assistant message can contain multiple
+# parallel tool_use blocks on a single JSONL line.
+EDIT_COUNT="$(printf '%s' "$TOOL_USES" | grep -oE '"name":"(Edit|Write|NotebookEdit)"' | wc -l | tr -d ' ')"
 if [ "${EDIT_COUNT:-0}" -ge 3 ]; then
   MEANINGFUL=1
 fi

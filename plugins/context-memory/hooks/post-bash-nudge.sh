@@ -15,8 +15,8 @@ CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)"
 [ -n "$CMD" ] || exit 0
 
 case "$CMD" in
-  *"git commit"*|*"gh pr create"*|*"gh pr merge"*|*"gh issue close"*|*"gh issue create"*|*"gh issue comment"*)
-    HINT="context-memory nudge: meaningful work just happened. If something novel was learned (a non-obvious decision, a gotcha, a why-it-matters), call mcp__context-memory__save_context now while it's fresh. Skip if it's pure bookkeeping."
+  *"git commit "*|*"gh pr create "*|*"gh pr merge "*|*"gh issue close "*|*"gh issue create "*|*"gh issue comment "*)
+    HINT="context-memory nudge: meaningful work just happened. If something novel was learned (a non-obvious decision, a gotcha, a why-it-matters), call mcp__context-memory__save_context now while it's fresh. If a surfaced context was load-bearing for solving the problem, also call mcp__context-memory__vote_context. Skip if it's pure bookkeeping."
     jq -nc --arg hint "$HINT" '{
       hookSpecificOutput: {
         hookEventName: "PostToolUse",

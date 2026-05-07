@@ -54,6 +54,44 @@ run_case "allows when stop_hook_active=true even if work happened" \
 run_case "blocks even if user prompt mentions tool name as text" \
   "false_positive_user_text.jsonl" false block
 
+# Three Edits in a single assistant message (one JSONL line) must still
+# count as 3, not 1. Line-based counting would silently undercount this.
+run_case "blocks on three parallel edits in one assistant message" \
+  "parallel_edits.jsonl" false block
+
+# A turn that runs Bash but the command is not meaningful work (e.g. ls)
+# must not trigger the predicate.
+run_case "allows on non-meaningful Bash (ls) only" \
+  "non_meaningful_bash.jsonl" false allow
+
+# Substring "git commit" inside a path like git-commit-history.txt must
+# not trip the meaningful-work matcher.
+run_case "allows when 'git commit' appears only as a substring in a filename" \
+  "false_substring_git_commit.jsonl" false allow
+
+# Empty / missing transcript: hook must fail open and let Claude stop.
+run_case "allows on empty transcript file" \
+  "empty.jsonl" false allow
+
+run_missing_transcript_case() {
+  local payload output decision
+  payload="$(jq -nc --arg p "$FIX/__does_not_exist__.jsonl" '{transcript_path:$p, stop_hook_active:false}')"
+  output="$(printf '%s' "$payload" | bash "$HOOK")"
+  if [ -z "$output" ]; then
+    decision="allow"
+  else
+    decision="$(printf '%s' "$output" | jq -r '.decision // "allow"' 2>/dev/null || echo "allow")"
+  fi
+  if [ "$decision" = "allow" ]; then
+    printf '  PASS  allows on missing transcript path\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  FAIL  allows on missing transcript path — got decision=%s\n' "$decision"
+    FAIL=$((FAIL + 1))
+  fi
+}
+run_missing_transcript_case
+
 echo
 echo "summary: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
