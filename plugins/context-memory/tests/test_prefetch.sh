@@ -60,7 +60,17 @@ run_no_prompt_case() {
 # single quotes — without breaking the heredoc.
 make_curl_stub() {
   local stub_dir
-  stub_dir="$(mktemp -d)"
+  # If mktemp fails, $stub_dir is empty and PATH="$stub_dir:$PATH" silently
+  # falls back to the system curl — which would make a real network call
+  # against the production API during tests. Bail out loudly instead.
+  stub_dir="$(mktemp -d)" || {
+    echo "FATAL: mktemp -d failed; refusing to run tests against the real API" >&2
+    exit 1
+  }
+  if [ -z "$stub_dir" ] || [ ! -d "$stub_dir" ]; then
+    echo "FATAL: mktemp -d returned an unusable path: '$stub_dir'" >&2
+    exit 1
+  fi
   cat > "$stub_dir/curl" <<'STUB'
 #!/bin/bash
 printf '%s' "$STUB_BODY"
@@ -75,7 +85,7 @@ STUB
 # no-op would leave the user wondering why prefetch went quiet.
 run_auth_fail_case() {
   local status="$1" stub_dir stderr_out exit_code
-  stub_dir="$(make_curl_stub)"
+  stub_dir="$(make_curl_stub)" || exit 1
   stderr_out="$(
     printf '{"prompt":"hi"}' \
       | PATH="$stub_dir:$PATH" \
@@ -106,7 +116,7 @@ run_auth_fail_case() {
 # expanding the hard-fail branch to all non-2xx.
 run_transient_fail_case() {
   local status="$1" stub_dir exit_code
-  stub_dir="$(make_curl_stub)"
+  stub_dir="$(make_curl_stub)" || exit 1
   printf '{"prompt":"hi"}' \
     | PATH="$stub_dir:$PATH" \
       CONTEXT_MEMORY_API_KEY=cm_test \
@@ -131,7 +141,7 @@ run_transient_fail_case() {
 # at exec time, so any byte sequence is safe.
 run_quote_in_body_case() {
   local stub_dir exit_code
-  stub_dir="$(make_curl_stub)"
+  stub_dir="$(make_curl_stub)" || exit 1
   printf '{"prompt":"hi"}' \
     | PATH="$stub_dir:$PATH" \
       CONTEXT_MEMORY_API_KEY=cm_test \
