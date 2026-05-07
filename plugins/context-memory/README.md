@@ -6,6 +6,7 @@ Persistent knowledge base for Claude Code sessions. Automatically retrieves rele
 
 - **MCP tools** for saving/searching/voting on contexts (`save_context`, `search_contexts`, `get_context`, `delete_context`, `vote_context`)
 - **Pre-fetch hook** that searches your context store on every prompt and injects the top hits as additional context for Claude
+- **End-of-turn nudge** (v0.3.0+) that holds the turn open if meaningful work happened (commits, PRs, issue ops, several edits) without a `save_context` or `vote_context` call, so learnings actually land in the store instead of getting lost
 
 Backend service: <https://context-memory.slova.app>
 
@@ -52,6 +53,27 @@ On every `UserPromptSubmit`, the hook:
 4. Prints the markdown on stdout — Claude Code prepends it to your prompt as additional context.
 
 It **fails open**: if the API key isn't set, the network is unreachable, the request times out, or anything else goes wrong, the hook prints nothing and your prompt passes through unchanged.
+
+## How the end-of-turn nudge works
+
+When Claude tries to end a turn, the `Stop` hook scans this turn's events (everything after the last user prompt). If the turn included meaningful work — a `git commit`, a `gh pr create`/`merge`, a `gh issue close`/`create`/`comment`, or three or more file edits — and Claude did **not** call `save_context` or `vote_context`, the hook returns `decision: "block"` with a directive reason. Claude then either saves what was novel, votes on contexts that were load-bearing, or briefly says nothing is worth saving — and stops on the next attempt (the runtime sets `stop_hook_active=true`, so the hook never fires twice in a row).
+
+A separate `PostToolUse` hook on `Bash` also injects a soft hint right after a commit/PR/issue command, so the model has the prompt fresh in context when it next pauses to think.
+
+Both hooks **fail open**: a missing transcript, missing `jq`, or any unexpected input causes them to exit silently and let Claude stop normally.
+
+The first auto-call to `save_context` / `vote_context` may trigger a permission prompt. To make it fully silent, allow these once or pre-allowlist them in `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__context-memory__save_context",
+      "mcp__context-memory__vote_context"
+    ]
+  }
+}
+```
 
 ## Requirements
 

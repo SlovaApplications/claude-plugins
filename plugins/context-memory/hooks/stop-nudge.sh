@@ -2,7 +2,11 @@
 # Stop hook: nudge Claude to save_context (and vote on used contexts) when
 # meaningful work happened this turn but no context-memory tool was called.
 #
-# Scope: only events after the LAST user message — i.e. just this turn's work.
+# Scope: only events after the LAST user PROMPT (not tool_result wrapper).
+# In Claude Code transcripts, tool_result blocks are also stored as
+# "type":"user" entries — distinguished by the presence of "tool_use_id" —
+# so we filter those out when locating the turn boundary.
+#
 # Once Claude is asked to continue (stop_hook_active=true), exit 0 to avoid
 # an infinite loop. Fails open: any error → exit 0 → Claude is allowed to stop.
 
@@ -15,23 +19,25 @@ STOP_ACTIVE="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/
 TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)"
 [ -n "$TRANSCRIPT" ] && [ -r "$TRANSCRIPT" ] || exit 0
 
-LAST_USER_LINE="$(grep -n '"type":"user"' "$TRANSCRIPT" | tail -n 1 | cut -d: -f1)"
+LAST_USER_LINE="$(grep -n '"type":"user"' "$TRANSCRIPT" | grep -v 'tool_use_id' | tail -n 1 | cut -d: -f1)"
 [ -n "$LAST_USER_LINE" ] || exit 0
 TURN="$(tail -n +"$LAST_USER_LINE" "$TRANSCRIPT")"
 
-if printf '%s' "$TURN" | grep -q 'mcp__context-memory__save_context\|mcp__context-memory__vote_context'; then
+TOOL_USES="$(printf '%s' "$TURN" | grep '"type":"tool_use"')"
+
+if printf '%s' "$TOOL_USES" | grep -qE '"name":"mcp__context-memory__(save_context|vote_context)"'; then
   exit 0
 fi
 
 MEANINGFUL=0
 
-if printf '%s' "$TURN" \
+if printf '%s' "$TOOL_USES" \
   | grep -E '"name":"Bash"' \
   | grep -qE 'git commit|gh pr create|gh pr merge|gh issue close|gh issue create|gh issue comment'; then
   MEANINGFUL=1
 fi
 
-EDIT_COUNT="$(printf '%s' "$TURN" | grep -cE '"name":"(Edit|Write|MultiEdit|NotebookEdit)"' 2>/dev/null)"
+EDIT_COUNT="$(printf '%s' "$TOOL_USES" | grep -cE '"name":"(Edit|Write|NotebookEdit)"' 2>/dev/null)"
 if [ "${EDIT_COUNT:-0}" -ge 3 ]; then
   MEANINGFUL=1
 fi
