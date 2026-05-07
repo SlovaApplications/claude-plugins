@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u1","message":{"role":"user","content":"what does X do?"}}
+{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"X does Y."}]}}

@@ -1,0 +1,6 @@
+{"type":"user","uuid":"u1","message":{"role":"user","content":"please commit and remember why"}}
+{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"git commit -m foo"}}]}}
+{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"[main 1234] foo"}]}}
+{"type":"assistant","uuid":"a2","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"mcp__context-memory__save_context","input":{"what":"...","why":"..."}}]}}
+{"type":"user","uuid":"u3","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"saved"}]}}
+{"type":"assistant","uuid":"a3","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}
