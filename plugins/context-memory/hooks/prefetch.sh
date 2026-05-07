@@ -2,8 +2,10 @@
 # UserPromptSubmit hook: search context-memory for prior contexts relevant to
 # the user's prompt and inject the top hits as additional context for Claude.
 #
-# Fails open: if anything goes wrong (no API key, network error, missing deps),
-# the script prints nothing and exits 0 so the prompt passes through unchanged.
+# Hard-fails (exit 2) if CONTEXT_MEMORY_API_KEY is unset — the plugin can't do
+# anything useful without it, and a silent no-op hides the misconfiguration.
+# All other failures (network error, missing deps, malformed response) still
+# fail open: the script prints nothing and exits 0 so the prompt passes through.
 
 API_KEY="${CONTEXT_MEMORY_API_KEY:-}"
 API_URL="${CONTEXT_MEMORY_API_URL:-https://api.context-memory.slova.app}"
@@ -11,7 +13,40 @@ TIMEOUT="${CONTEXT_MEMORY_PREFETCH_TIMEOUT:-1.5}"
 LIMIT="${CONTEXT_MEMORY_PREFETCH_LIMIT:-5}"
 MAX_OUTPUT_BYTES="${CONTEXT_MEMORY_PREFETCH_MAX_BYTES:-2000}"
 
-[ -n "$API_KEY" ] || exit 0
+if [ -z "$API_KEY" ]; then
+  cat >&2 <<'EOF'
+context-memory: CONTEXT_MEMORY_API_KEY is not set.
+
+Fix this by either:
+
+  1. Setting an API key (get one at https://context-memory.slova.app).
+
+     macOS / Linux (bash, zsh):
+
+       export CONTEXT_MEMORY_API_KEY=cm_...
+
+     Add the line to ~/.zshrc or ~/.bashrc to persist across sessions.
+
+     Windows (PowerShell), persistent for the current user:
+
+       [Environment]::SetEnvironmentVariable("CONTEXT_MEMORY_API_KEY", "cm_...", "User")
+
+     Or session-only:
+
+       $env:CONTEXT_MEMORY_API_KEY = "cm_..."
+
+     Windows (cmd.exe), persistent — takes effect in NEW shells only:
+
+       setx CONTEXT_MEMORY_API_KEY cm_...
+
+  2. Disabling the plugin:
+
+       /plugin                                   (interactive)
+       claude plugin remove context-memory@slova (one-shot)
+EOF
+  exit 2
+fi
+
 command -v jq   >/dev/null 2>&1 || exit 0
 command -v curl >/dev/null 2>&1 || exit 0
 
@@ -25,15 +60,58 @@ QUERY="$(printf '%s' "$PROMPT" | head -c 500)"
 REQUEST_BODY="$(jq -nc --arg q "$QUERY" --argjson l "$LIMIT" '{query:$q, limit:$l}' 2>/dev/null)"
 [ -n "$REQUEST_BODY" ] || exit 0
 
-RESPONSE="$(
-  curl -fsS \
+# Drop -f so non-2xx responses still return the body + status (so we can
+# distinguish auth failures from other 4xx/5xx). Append the HTTP status as
+# the last line via -w; -sS keeps curl quiet on success but lets real
+# transport errors (timeout, DNS, connection refused) bubble up to ||.
+HTTP_RESPONSE="$(
+  curl -sS \
     --max-time "$TIMEOUT" \
+    -w '\n%{http_code}' \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
     -X POST \
     -d "$REQUEST_BODY" \
     "$API_URL/api/v1/contexts/search" 2>/dev/null
 )" || exit 0
+
+HTTP_STATUS="$(printf '%s' "$HTTP_RESPONSE" | tail -n1)"
+RESPONSE="$(printf '%s' "$HTTP_RESPONSE" | sed '$d')"
+
+# 401/403 = the API key is set but the server rejected it. Surface this loudly
+# (same reasoning as missing key) — it's almost always a persistent
+# misconfiguration, and a silent no-op leaves the user wondering why prefetch
+# stopped working. Other non-2xx statuses (5xx, 429, etc.) are likely
+# transient and fall through to the fail-open path below.
+if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
+  cat >&2 <<EOF
+context-memory: authentication failed (HTTP $HTTP_STATUS).
+
+Your CONTEXT_MEMORY_API_KEY is set but the server rejected it. The key
+is most likely expired, revoked, or malformed.
+
+Fix this by either:
+
+  1. Issuing a new API key at https://context-memory.slova.app and
+     replacing the value in your shell config (see the missing-key
+     error message for per-OS instructions).
+
+  2. Disabling the plugin:
+
+       /plugin                                   (interactive)
+       claude plugin remove context-memory@slova (one-shot)
+EOF
+  exit 2
+fi
+
+# Any other non-2xx: fail open. Server errors and rate limits should not
+# block the user's prompt. The pattern matches exactly 200-299; empty or
+# non-numeric statuses (shouldn't happen with curl's %{http_code}, but
+# defensive) fall through to the wildcard branch.
+case "$HTTP_STATUS" in
+  2[0-9][0-9]) ;;
+  *)           exit 0 ;;
+esac
 
 [ -n "$RESPONSE" ] || exit 0
 
