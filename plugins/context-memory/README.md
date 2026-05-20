@@ -51,8 +51,8 @@ On every `UserPromptSubmit`, the hook:
 
 1. Reads your prompt from the hook stdin payload.
 2. Sends it (capped at 500 chars) to `POST /api/v1/contexts/search` with your bearer token.
-3. Formats the top hits (1.5s timeout, 2KB output cap) as plain markdown.
-4. Prints the markdown on stdout — Claude Code prepends it to your prompt as additional context.
+3. Formats the top hits — a mixed list of Contexts and Topics — as plain markdown (1.5s timeout, 2KB output cap).
+4. Prints the markdown on stdout, so Claude Code prepends it to your prompt as additional context. When several Contexts come back and no Topic covers them, it appends a nudge suggesting Claude synthesize them with `create_topic`.
 
 It **fails open**: if the API key isn't set, the network is unreachable, the request times out, or anything else goes wrong, the hook prints nothing and your prompt passes through unchanged.
 
