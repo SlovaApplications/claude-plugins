@@ -159,6 +159,78 @@ run_quote_in_body_case() {
   fi
 }
 
+# Success render — Contexts only. The hook must parse the post-cutover search
+# shape (flat `body` + `type`, not the retired `.content.*` nesting) and, when
+# several Contexts return with no Topic, emit the create_topic synthesis nudge.
+run_render_contexts_case() {
+  local stub_dir stdout_out exit_code
+  stub_dir="$(make_curl_stub)" || exit 1
+  stdout_out="$(
+    printf '{"prompt":"hi"}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        STUB_BODY='[{"type":"context","id":"c1","body":"NAT Gateway is the third highest cost","tags":["aws"]},{"type":"context","id":"c2","body":"Single NAT for cost savings","tags":["aws"]}]' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  exit_code=$?
+  rm -rf "$stub_dir"
+
+  if [ "$exit_code" -ne 0 ]; then
+    printf '  FAIL  context render — expected exit 0, got %s\n' "$exit_code"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  if ! printf '%s' "$stdout_out" | grep -q 'NAT Gateway is the third highest cost'; then
+    printf '  FAIL  context render — context body missing from output\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  if ! printf '%s' "$stdout_out" | grep -q 'create_topic'; then
+    printf '  FAIL  context render — synthesis nudge missing\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  printf '  PASS  Contexts render and trigger the create_topic nudge\n'
+  PASS=$((PASS + 1))
+}
+
+# Success render — a Topic is present. The Topic renders with its [Topic]
+# marker, and the synthesis nudge must NOT fire: a Topic already covers the
+# cluster, so nudging the agent to create another would be noise.
+run_render_topic_case() {
+  local stub_dir stdout_out exit_code
+  stub_dir="$(make_curl_stub)" || exit 1
+  stdout_out="$(
+    printf '{"prompt":"hi"}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        STUB_BODY='[{"type":"topic","id":"t1","title":"AWS cost review","overview":"Where the spend goes."},{"type":"context","id":"c1","body":"NAT Gateway cost"}]' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  exit_code=$?
+  rm -rf "$stub_dir"
+
+  if [ "$exit_code" -ne 0 ]; then
+    printf '  FAIL  topic render — expected exit 0, got %s\n' "$exit_code"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  if ! printf '%s' "$stdout_out" | grep -q '\[Topic\] AWS cost review'; then
+    printf '  FAIL  topic render — [Topic] marker missing\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  if printf '%s' "$stdout_out" | grep -q 'create_topic'; then
+    printf '  FAIL  topic render — nudge fired despite a Topic being present\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  printf '  PASS  Topic renders with [Topic] marker and suppresses the nudge\n'
+  PASS=$((PASS + 1))
+}
+
 echo "prefetch.sh smoke tests"
 run_missing_key_case
 run_no_prompt_case
@@ -167,6 +239,8 @@ run_auth_fail_case 403
 run_transient_fail_case 500
 run_transient_fail_case 429
 run_quote_in_body_case
+run_render_contexts_case
+run_render_topic_case
 
 echo
 echo "summary: $PASS passed, $FAIL failed"

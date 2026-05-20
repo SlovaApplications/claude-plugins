@@ -118,20 +118,43 @@ esac
 COUNT="$(printf '%s' "$RESPONSE" | jq 'if type == "array" then length else 0 end' 2>/dev/null)"
 [ -n "$COUNT" ] && [ "$COUNT" != "0" ] || exit 0
 
+# Count each kind separately: the counts label the header and decide whether
+# the synthesis nudge fires below. A malformed response yields empty strings,
+# which the arithmetic comparisons treat as 0.
+TOPIC_COUNT="$(printf '%s' "$RESPONSE" | jq '[.[] | select(.type == "topic")] | length' 2>/dev/null)"
+CONTEXT_COUNT="$(printf '%s' "$RESPONSE" | jq '[.[] | select(.type != "topic")] | length' 2>/dev/null)"
+
+# Search returns a mixed Context+Topic list (see context-memory DATA_MODEL.md):
+# every item carries a `type`; Contexts carry a flat markdown `body`, Topics
+# carry `title` + `overview`. The old `.content.{what,why,...}` shape is gone.
 {
-  printf '[context-memory: %s relevant context(s) from prior sessions]\n\n' "$COUNT"
+  printf '[context-memory: %s relevant result(s) from prior sessions]\n\n' "$COUNT"
   printf '%s' "$RESPONSE" | jq -r '
+    def clip($n): if (. | length) > $n then .[0:$n] + "…" else . end;
     .[]
-    | "### " + (.content.what // "(untitled)")
-      + "\n**Why it matters:** " + (.content.why // "—")
-      + (if (.content.when_relevant // []) | length > 0
-           then "\n**When relevant:** " + ((.content.when_relevant // []) | join(", "))
-           else "" end)
-      + (if (.content.dead_ends // []) | length > 0
-           then "\n**Dead ends:** " + ((.content.dead_ends // []) | join("; "))
-           else "" end)
+    | (
+        if .type == "topic" then
+          "### [Topic] " + ((.title // "(untitled topic)") | clip(120))
+          + "\n" + ((.overview // "") | clip(280))
+        else
+          ((.body // "") | split("\n")) as $lines
+          | (($lines[0] // "") | sub("^#+[[:space:]]*"; "")) as $head
+          | "### " + (if ($head | test("[^[:space:]]")) then ($head | clip(120))
+                      else "(untitled context)" end)
+          + "\n" + (($lines[1:] | join("\n")) | clip(280))
+        end
+      )
+      + (if (.tags // []) | length > 0 then "\ntags: " + (.tags | join(", ")) else "" end)
       + "\n"
   ' 2>/dev/null
 } | head -c "$MAX_OUTPUT_BYTES"
+
+# Synthesis nudge: several Contexts came back and no Topic ties them together.
+# Encourage the agent to compile them. Printed outside the byte cap above so a
+# long result list can't truncate it away — it is short and is the whole point
+# of surfacing the cluster.
+if [ "${CONTEXT_COUNT:-0}" -ge 2 ] && [ "${TOPIC_COUNT:-0}" -eq 0 ]; then
+  printf '\n[context-memory: %s related Contexts surfaced and no Topic synthesizes them. If they cohere around one subject, consider calling create_topic to compile them into a durable synthesis.]\n' "$CONTEXT_COUNT"
+fi
 
 exit 0
