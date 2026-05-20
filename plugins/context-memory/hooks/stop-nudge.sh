@@ -1,6 +1,6 @@
 #!/bin/bash
-# Stop hook: nudge Claude to save_context (and vote on used contexts) when
-# meaningful work happened this turn but no context-memory tool was called.
+# Stop hook: nudge Claude to save_context when meaningful work happened this
+# turn but no context-memory tool was called.
 #
 # Scope: only events after the LAST user PROMPT (not tool_result wrapper).
 # In Claude Code transcripts, tool_result blocks are also stored as
@@ -25,7 +25,7 @@ TURN="$(tail -n +"$LAST_USER_LINE" "$TRANSCRIPT")"
 
 TOOL_USES="$(printf '%s' "$TURN" | grep '"type":"tool_use"')"
 
-if printf '%s' "$TOOL_USES" | grep -qE '"name":"mcp__context-memory__(save_context|vote_context)"'; then
+if printf '%s' "$TOOL_USES" | grep -qE '"name":"mcp__context-memory__save_context"'; then
   exit 0
 fi
 
@@ -48,6 +48,6 @@ fi
 
 jq -nc '{
   decision: "block",
-  reason: "context-memory nudge: this turn included meaningful work (commits, PRs, issue operations, or several edits) but no mcp__context-memory__save_context or mcp__context-memory__vote_context call was made. Before stopping: (1) save anything novel learned that future sessions would benefit from — focus on the WHY and gotchas, not what is already in code/git; (2) vote on any contexts that were actually load-bearing for solving the problem (upvote ones that helped, downvote ones that were wrong/outdated). If nothing is worth saving and no surfaced context was load-bearing, briefly say so in one line and stop again — this hook will not fire twice."
+  reason: "context-memory nudge: this turn included meaningful work (commits, PRs, issue operations, or several edits) but no mcp__context-memory__save_context call was made. Before stopping, save anything novel that future sessions would benefit from — focus on the WHY and the gotchas, not what is already in code or git history. If nothing is worth saving, briefly say so in one line and stop again — this hook will not fire twice."
 }'
 exit 0
