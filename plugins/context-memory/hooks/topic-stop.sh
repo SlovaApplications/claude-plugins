@@ -53,14 +53,19 @@ COUNT="$(printf '%s' "$RESPONSE" | jq '(.clusters // []) | length' 2>/dev/null)"
 # One imperative line per cluster: the tag, the live-Context count, and the
 # context_ids to attach. IDs are capped so a very large cluster cannot blow
 # up the block message; the agent can list_contexts by tag for the rest.
+#
+# $total is the true live count (context_count); $ids is only the sample the
+# backend sent, itself already capped server-side — so "+N more" must be
+# counted from $total, not from the length of the truncated $ids array.
 DETAIL="$(printf '%s' "$RESPONSE" | jq -r --argjson max "$MAX_IDS" '
   .clusters[]
   | (.context_ids // []) as $ids
-  | "  - tag \"" + .tag + "\": "
-    + ((.context_count // ($ids | length)) | tostring)
+  | (.context_count // ($ids | length)) as $total
+  | ([$max, ($ids | length)] | min) as $shown
+  | "  - tag \"" + .tag + "\": " + ($total | tostring)
     + " Contexts, no Topic. context_ids: " + (($ids[0:$max]) | join(", "))
-    + (if ($ids | length) > $max
-       then " (+" + (($ids | length) - $max | tostring)
+    + (if $total > $shown
+       then " (+" + (($total - $shown) | tostring)
             + " more — list_contexts tag=\"" + .tag + "\" for the rest)"
        else "" end)
 ' 2>/dev/null)"
