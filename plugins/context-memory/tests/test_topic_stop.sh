@@ -209,6 +209,105 @@ run_curl_failure_case() {
   fi
 }
 
+# A non-HTTPS, non-local API_URL would leak the key in cleartext. The hook
+# must refuse before any request — and, being a Stop hook, fail open.
+run_bad_url_case() {
+  local stub_dir output
+  stub_dir="$(make_curl_stub)" || exit 1
+  output="$(
+    printf '{"stop_hook_active":false}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        CONTEXT_MEMORY_API_URL=http://insecure.example.com \
+        STUB_BODY='{"clusters":[{"tag":"x","context_count":6,"context_ids":["a"]}]}' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  rm -rf "$stub_dir"
+  # The guard fires before curl, so the stub's blocking response is never
+  # reached: empty output, allow.
+  if [ "$(decision_of "$output")" = "allow" ] && [ -z "$output" ]; then
+    printf '  PASS  non-HTTPS API_URL is refused before any request\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  FAIL  non-HTTPS API_URL — expected allow + empty output\n        output: %s\n' "$output"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# http://localhost is allowed — a local dev backend has no network hop to
+# eavesdrop. The guard must let it through.
+run_localhost_url_case() {
+  local stub_dir output
+  stub_dir="$(make_curl_stub)" || exit 1
+  output="$(
+    printf '{"stop_hook_active":false}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        CONTEXT_MEMORY_API_URL=http://localhost:8000 \
+        STUB_BODY='{"clusters":[{"tag":"auth","context_count":6,"context_ids":["a","b"]}]}' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  rm -rf "$stub_dir"
+  if [ "$(decision_of "$output")" = "block" ]; then
+    printf '  PASS  http://localhost API_URL is allowed for local dev\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  FAIL  http://localhost — expected block (guard should allow it)\n        output: %s\n' "$output"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# A `curl` stub that records its own argv to $ARGV_FILE, so the test can
+# assert the API key is not passed on the command line.
+make_argv_recording_curl_stub() {
+  local stub_dir
+  stub_dir="$(mktemp -d)" || {
+    echo "FATAL: mktemp -d failed; refusing to run tests against the real API" >&2
+    exit 1
+  }
+  if [ -z "$stub_dir" ] || [ ! -d "$stub_dir" ]; then
+    echo "FATAL: mktemp -d returned an unusable path: '$stub_dir'" >&2
+    exit 1
+  fi
+  cat > "$stub_dir/curl" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$@" > "$ARGV_FILE"
+printf '%s' "$STUB_BODY"
+printf '\n%s' "$STUB_STATUS"
+STUB
+  chmod +x "$stub_dir/curl"
+  printf '%s' "$stub_dir"
+}
+
+# The API key must never appear in curl's argv — argv is readable by any
+# local process via `ps`/`/proc`. It is passed through a header file instead.
+run_key_not_in_argv_case() {
+  local stub_dir argv_file
+  stub_dir="$(make_argv_recording_curl_stub)" || exit 1
+  argv_file="$(mktemp)" || { rm -rf "$stub_dir"; exit 1; }
+  printf '{"stop_hook_active":false}' \
+    | PATH="$stub_dir:$PATH" \
+      CONTEXT_MEMORY_API_KEY=cm_secret_should_not_leak \
+      ARGV_FILE="$argv_file" \
+      STUB_BODY='{"clusters":[]}' \
+      STUB_STATUS=200 \
+      bash "$HOOK" >/dev/null 2>&1
+  if [ ! -s "$argv_file" ]; then
+    printf '  FAIL  key-not-in-argv — curl stub recorded no argv (was it called?)\n'
+    FAIL=$((FAIL + 1))
+  elif grep -qF 'cm_secret_should_not_leak' "$argv_file"; then
+    printf '  FAIL  key-not-in-argv — API key leaked into curl argv:\n%s\n' "$(cat "$argv_file")"
+    FAIL=$((FAIL + 1))
+  else
+    printf '  PASS  API key is not present in curl argv\n'
+    PASS=$((PASS + 1))
+  fi
+  rm -rf "$stub_dir"
+  rm -f "$argv_file"
+}
+
 echo "topic-stop.sh smoke tests"
 
 run_missing_key_case
@@ -252,6 +351,9 @@ run_block_content_case
 run_id_cap_case
 run_truncated_cluster_case
 run_curl_failure_case
+run_bad_url_case
+run_localhost_url_case
+run_key_not_in_argv_case
 
 echo
 echo "summary: $PASS passed, $FAIL failed"

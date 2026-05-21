@@ -21,9 +21,25 @@ MAX_IDS=25
 command -v jq   >/dev/null 2>&1 || exit 0
 command -v curl >/dev/null 2>&1 || exit 0
 
+# Never send the bearer token over a cleartext connection. https is always
+# fine; http only for a local backend, where there is no network hop to
+# eavesdrop. Anything else → fail open (a Stop hook must not hard-fail).
+case "$API_URL" in
+  https://*) ;;
+  http://localhost | http://localhost:* | http://127.0.0.1 | http://127.0.0.1:*) ;;
+  *) exit 0 ;;
+esac
+
 INPUT="$(cat)"
 STOP_ACTIVE="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)"
 [ "$STOP_ACTIVE" = "true" ] && exit 0
+
+# Pass the auth header through a 0600 temp file, not curl's argv — argv is
+# readable by any local process via `ps`/`/proc`. mktemp creates the file
+# 0600; the EXIT trap removes it on every exit path below.
+AUTH_HEADER_FILE="$(mktemp 2>/dev/null)" || exit 0
+trap 'rm -f "$AUTH_HEADER_FILE"' EXIT
+printf 'Authorization: Bearer %s\n' "$API_KEY" > "$AUTH_HEADER_FILE" || exit 0
 
 # -sS keeps curl quiet on success but lets real transport errors (timeout,
 # DNS, connection refused) bubble up to ||. -w appends the HTTP status as the
@@ -32,7 +48,7 @@ HTTP_RESPONSE="$(
   curl -sS \
     --max-time "$TIMEOUT" \
     -w '\n%{http_code}' \
-    -H "Authorization: Bearer $API_KEY" \
+    -H "@$AUTH_HEADER_FILE" \
     "$API_URL/api/v1/contexts/cluster-suggestions" 2>/dev/null
 )" || exit 0
 
