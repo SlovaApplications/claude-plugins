@@ -30,6 +30,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop-nudge.sh",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/topic-stop.sh",
+            "timeout": 4
           }
         ]
       }
