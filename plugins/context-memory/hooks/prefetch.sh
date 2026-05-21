@@ -50,6 +50,28 @@ fi
 command -v jq   >/dev/null 2>&1 || exit 0
 command -v curl >/dev/null 2>&1 || exit 0
 
+# Refuse to send the API key over a cleartext connection. https is always
+# fine; http is allowed only for a local backend, where there is no network
+# hop to eavesdrop. Anything else is a misconfiguration that would leak the
+# key — surface it loudly (same posture as a missing key), don't no-op.
+case "$API_URL" in
+  https://*) ;;
+  http://localhost | http://localhost:* | http://127.0.0.1 | http://127.0.0.1:*) ;;
+  *)
+    cat >&2 <<EOF
+context-memory: refusing to send your API key to a non-HTTPS URL.
+
+CONTEXT_MEMORY_API_URL is set to:
+  $API_URL
+
+Over a non-TLS connection the API key travels in cleartext. Use an
+https:// URL, or point at a local backend (http://localhost or
+http://127.0.0.1) for development.
+EOF
+    exit 2
+    ;;
+esac
+
 INPUT="$(cat)"
 PROMPT="$(printf '%s' "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)"
 [ -n "$PROMPT" ] || exit 0
@@ -60,6 +82,13 @@ QUERY="$(printf '%s' "$PROMPT" | head -c 500)"
 REQUEST_BODY="$(jq -nc --arg q "$QUERY" --argjson l "$LIMIT" '{query:$q, limit:$l}' 2>/dev/null)"
 [ -n "$REQUEST_BODY" ] || exit 0
 
+# Pass the auth header through a 0600 temp file, not curl's argv — argv is
+# readable by any local process via `ps`/`/proc`. mktemp creates the file
+# 0600; the EXIT trap removes it on every exit path below.
+AUTH_HEADER_FILE="$(mktemp 2>/dev/null)" || exit 0
+trap 'rm -f "$AUTH_HEADER_FILE"' EXIT
+printf 'Authorization: Bearer %s\n' "$API_KEY" > "$AUTH_HEADER_FILE" || exit 0
+
 # Drop -f so non-2xx responses still return the body + status (so we can
 # distinguish auth failures from other 4xx/5xx). Append the HTTP status as
 # the last line via -w; -sS keeps curl quiet on success but lets real
@@ -68,7 +97,7 @@ HTTP_RESPONSE="$(
   curl -sS \
     --max-time "$TIMEOUT" \
     -w '\n%{http_code}' \
-    -H "Authorization: Bearer $API_KEY" \
+    -H "@$AUTH_HEADER_FILE" \
     -H "Content-Type: application/json" \
     -X POST \
     -d "$REQUEST_BODY" \
