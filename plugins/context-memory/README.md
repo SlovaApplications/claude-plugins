@@ -68,7 +68,7 @@ Both hooks **fail open**: a missing transcript, missing `jq`, or any unexpected 
 
 ## How the topic-synthesis hook works
 
-A second `Stop` hook (`topic-stop.sh`) makes sure accumulated knowledge gets compiled. When Claude tries to end a turn, it calls `GET /api/v1/contexts/cluster-suggestions`: the backend reports any tag carrying enough live Contexts to warrant a Topic but with no Topic covering it. If any such cluster exists, the hook returns `decision: "block"` with the tag, the Context count, and the exact `context_ids` — so Claude can call `create_topic` and attach them in one step. If Claude judges a cluster should not become a Topic, it says so in one line and stops on the next attempt (`stop_hook_active=true` stops the hook firing twice).
+A second `Stop` hook (`topic-stop.sh`) makes sure accumulated knowledge gets compiled. When Claude tries to end a turn, it calls `GET /api/v1/contexts/cluster-suggestions`: the backend reports any tag carrying enough live Contexts to warrant a Topic but with no Topic covering it. If any such cluster exists, the hook returns `decision: "block"` with the tag, the Context count, and the exact `context_ids` — so Claude can call `create_topic` and attach them in one step. If Claude judges a cluster should not become a Topic — a generic label, or Contexts too scattered to cohere under one scope — it calls `dismiss_cluster` instead, and that cluster stops being flagged on future turns.
 
 Detecting clusters costs no tokens — it is a single database query. Claude spends tokens only on the synthesis itself, where it still has the full session in context.
 
