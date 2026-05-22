@@ -9,7 +9,7 @@ Persistent knowledge base for Claude Code sessions. Automatically retrieves rele
   - **Audit and cull**: `list_contexts` (paginated, filterable by repo, source type, tag, and age), `bulk_delete_contexts`
 - **Pre-fetch hook** that searches your context store on every prompt and injects the top hits as additional context for Claude
 - **End-of-turn nudge** (v0.3.0+) that holds the turn open if meaningful work happened (commits, PRs, issue ops, several edits) without a `save_context` call, so learnings actually land in the store instead of getting lost
-- **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered
+- **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered — or explicitly dismissed (v0.4.1+) when a cluster genuinely shouldn't become a Topic
 
 Backend service: <https://context-memory.slova.app>
 
@@ -68,7 +68,7 @@ Both hooks **fail open**: a missing transcript, missing `jq`, or any unexpected 
 
 ## How the topic-synthesis hook works
 
-A second `Stop` hook (`topic-stop.sh`) makes sure accumulated knowledge gets compiled. When Claude tries to end a turn, it calls `GET /api/v1/contexts/cluster-suggestions`: the backend reports any tag carrying enough live Contexts to warrant a Topic but with no Topic covering it. If any such cluster exists, the hook returns `decision: "block"` with the tag, the Context count, and the exact `context_ids` — so Claude can call `create_topic` and attach them in one step. If Claude judges a cluster should not become a Topic, it says so in one line and stops on the next attempt (`stop_hook_active=true` stops the hook firing twice).
+A second `Stop` hook (`topic-stop.sh`) makes sure accumulated knowledge gets compiled. When Claude tries to end a turn, it calls `GET /api/v1/contexts/cluster-suggestions`: the backend reports any tag carrying enough live Contexts to warrant a Topic but with no Topic covering it. If any such cluster exists, the hook returns `decision: "block"` with the tag, the Context count, and the exact `context_ids` — so Claude can call `create_topic` and attach them in one step. If Claude judges a cluster should not become a Topic — a generic label, or Contexts too scattered to cohere under one scope — it calls `dismiss_cluster` instead, and that cluster stops being flagged on future turns.
 
 Detecting clusters costs no tokens — it is a single database query. Claude spends tokens only on the synthesis itself, where it still has the full session in context.
 
