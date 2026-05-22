@@ -2,8 +2,9 @@
 # Stop hook: block the agent from ending its turn while context-memory has
 # tag clusters that crossed the synthesis threshold with no Topic covering
 # them. Detection is one read-only API call (no tokens spent); the agent
-# does the synthesis itself via create_topic, where it still has the full
-# session context — more than it ever saved to context-memory.
+# resolves each cluster itself — create_topic to synthesize, or
+# dismiss_cluster when a cluster should not become a Topic — while it still
+# has the full session context, more than it ever saved to context-memory.
 #
 # stop_hook_active guard: once the agent has already been asked to continue,
 # exit 0 so the hook never loops forever.
@@ -89,7 +90,7 @@ DETAIL="$(printf '%s' "$RESPONSE" | jq -r --argjson max "$MAX_IDS" '
 
 REASON="context-memory: ${COUNT} tag cluster(s) have reached the synthesis threshold with no Topic covering them. Before you stop, call create_topic for each cluster below — give each a title, scope, overview, and a body that compiles the understanding, and pass the listed context_ids so the Contexts become a durable synthesis:
 ${DETAIL}
-You have more context right now than a future session will. If a cluster genuinely should not become a single Topic, say so in one line and stop again — this hook does not fire twice."
+You have more context right now than a future session will. If a cluster genuinely should not become a Topic — a generic/process label, or Contexts too scattered to cohere under one scope — call dismiss_cluster(tag, reason) instead of create_topic. A dismissed cluster stops being flagged; this is how you clear a cluster you are deliberately not synthesizing."
 
 jq -nc --arg r "$REASON" '{decision: "block", reason: $r}'
 exit 0

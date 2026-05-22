@@ -9,7 +9,7 @@ Persistent knowledge base for Claude Code sessions. Automatically retrieves rele
   - **Audit and cull**: `list_contexts` (paginated, filterable by repo, source type, tag, and age), `bulk_delete_contexts`
 - **Pre-fetch hook** that searches your context store on every prompt and injects the top hits as additional context for Claude
 - **End-of-turn nudge** (v0.3.0+) that holds the turn open if meaningful work happened (commits, PRs, issue ops, several edits) without a `save_context` call, so learnings actually land in the store instead of getting lost
-- **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered
+- **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered — or explicitly dismissed (v0.4.1+) when a cluster genuinely shouldn't become a Topic
 
 Backend service: <https://context-memory.slova.app>
 
