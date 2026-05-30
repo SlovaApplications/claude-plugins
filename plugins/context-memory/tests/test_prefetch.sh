@@ -231,6 +231,84 @@ run_render_topic_case() {
   PASS=$((PASS + 1))
 }
 
+# Usage guidance must accompany any non-empty render. The results are one-shot
+# context; the output has to tell the agent what to do with them, not just list
+# them. Asserted on a single-result body so it can't be confused with the nudge.
+run_usage_guidance_case() {
+  local stub_dir stdout_out exit_code
+  stub_dir="$(make_curl_stub)" || exit 1
+  stdout_out="$(
+    printf '{"prompt":"hi"}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        STUB_BODY='[{"type":"context","id":"c1","body":"one lone note"}]' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  exit_code=$?
+  rm -rf "$stub_dir"
+  if [ "$exit_code" -eq 0 ] \
+     && printf '%s' "$stdout_out" | grep -q 'how to use the results above' \
+     && printf '%s' "$stdout_out" | grep -q 'save_context what you learned'; then
+    printf '  PASS  render includes one-shot usage guidance\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  FAIL  usage guidance missing\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# Contexts are type-marked with [Context], mirroring the [Topic] marker, so the
+# agent can tell a compiled synthesis from a raw atom at a glance.
+run_context_marker_case() {
+  local stub_dir stdout_out exit_code
+  stub_dir="$(make_curl_stub)" || exit 1
+  stdout_out="$(
+    printf '{"prompt":"hi"}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        STUB_BODY='[{"type":"context","id":"c1","body":"NAT Gateway cost note"}]' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  exit_code=$?
+  rm -rf "$stub_dir"
+  if [ "$exit_code" -eq 0 ] && printf '%s' "$stdout_out" | grep -q '\[Context\] NAT Gateway cost note'; then
+    printf '  PASS  Context renders with [Context] type marker\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  FAIL  [Context] marker missing\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# Topics render before Contexts even when the API returns a Context first.
+# The stub orders context-then-topic; the hook must invert that so the
+# compiled understanding leads.
+run_topic_ordering_case() {
+  local stub_dir stdout_out exit_code topic_line ctx_line
+  stub_dir="$(make_curl_stub)" || exit 1
+  stdout_out="$(
+    printf '{"prompt":"hi"}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        STUB_BODY='[{"type":"context","id":"c1","body":"raw atom outranks"},{"type":"topic","id":"t1","title":"The synthesis","overview":"compiled view"}]' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  exit_code=$?
+  rm -rf "$stub_dir"
+  topic_line="$(printf '%s' "$stdout_out" | grep -n '\[Topic\]' | head -1 | cut -d: -f1)"
+  ctx_line="$(printf '%s' "$stdout_out" | grep -n '\[Context\]' | head -1 | cut -d: -f1)"
+  if [ "$exit_code" -eq 0 ] && [ -n "$topic_line" ] && [ -n "$ctx_line" ] && [ "$topic_line" -lt "$ctx_line" ]; then
+    printf '  PASS  Topics render before Contexts regardless of API order\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  FAIL  Topic-first ordering — topic@%s context@%s\n        stdout: %s\n' "$topic_line" "$ctx_line" "$stdout_out"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
 # A non-HTTPS, non-local API_URL would send the API key in cleartext. The
 # hook must refuse loudly (exit 2) and never reach the request.
 run_bad_url_case() {
@@ -340,6 +418,9 @@ run_transient_fail_case 429
 run_quote_in_body_case
 run_render_contexts_case
 run_render_topic_case
+run_usage_guidance_case
+run_context_marker_case
+run_topic_ordering_case
 run_bad_url_case
 run_localhost_url_case
 run_key_not_in_argv_case

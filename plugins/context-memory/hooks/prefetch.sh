@@ -160,7 +160,11 @@ CONTEXT_COUNT="$(printf '%s' "$RESPONSE" | jq '[.[] | select(.type != "topic")] 
   printf '[context-memory: %s relevant result(s) from prior sessions]\n\n' "$COUNT"
   printf '%s' "$RESPONSE" | jq -r '
     def clip($n): if (. | length) > $n then .[0:$n] + "…" else . end;
-    .[]
+    # Topics first (compiled understanding), then Contexts (the supporting
+    # source notes). Relevance order is preserved within each group, so the
+    # agent meets the synthesis before the atoms it was built from.
+    ([.[] | select(.type == "topic")] + [.[] | select(.type != "topic")])
+    | .[]
     | (
         if .type == "topic" then
           "### [Topic] " + ((.title // "(untitled topic)") | clip(120))
@@ -168,7 +172,7 @@ CONTEXT_COUNT="$(printf '%s' "$RESPONSE" | jq '[.[] | select(.type != "topic")] 
         else
           ((.body // "") | split("\n")) as $lines
           | (($lines[0] // "") | sub("^#+[[:space:]]*"; "")) as $head
-          | "### " + (if ($head | test("[^[:space:]]")) then ($head | clip(120))
+          | "### [Context] " + (if ($head | test("[^[:space:]]")) then ($head | clip(120))
                       else "(untitled context)" end)
           + "\n" + (($lines[1:] | join("\n")) | clip(280))
         end
@@ -177,6 +181,13 @@ CONTEXT_COUNT="$(printf '%s' "$RESPONSE" | jq '[.[] | select(.type != "topic")] 
       + "\n"
   ' 2>/dev/null
 } | head -c "$MAX_OUTPUT_BYTES"
+
+# Usage guidance. The results above are one-shot context — the agent loads
+# them once and acts; it will not re-search on its own. So the output has to
+# say what to DO with them, not just list them. Printed outside the byte cap
+# (like the nudge below) so a long result list can never truncate away the
+# instructions, and unconditional on any non-empty result.
+printf '\n[context-memory — how to use the results above: if a Topic covers your task, prefer it and drill into its source Contexts (get_context) for detail; if nothing here matches, do the work, then save_context what you learned. Do not proceed as if no prior knowledge exists.]\n'
 
 # Synthesis nudge: several Contexts came back and no Topic ties them together.
 # Encourage the agent to compile them. Printed outside the byte cap above so a
