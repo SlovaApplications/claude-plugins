@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  pre-commit:
+    name: Static Checks (pre-commit)
+    runs-on: ubuntu-latest
+
+    # Runs the same hooks devs run locally (shellcheck + file hygiene), so the
+    # static layer is single-sourced in .pre-commit-config.yaml. gitleaks is
+    # skipped here — it has its own full-history job in security-scan.yml; the
+    # pre-commit gitleaks hook only scans the staged diff (a no-op in CI).
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+        env:
+          SKIP: gitleaks
+
+  shell-tests:
+    name: Shell hook tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # jq is preinstalled on GitHub-hosted ubuntu runners; the suite stubs
+      # git/curl on a temp PATH, so nothing touches a real repo or the API.
+      - name: Run hook test suite
+        run: |
+          set -e
+          for t in plugins/context-memory/tests/test_*.sh; do
+            echo "=== $t ==="
+            bash "$t"
+          done

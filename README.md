@@ -24,6 +24,21 @@ See [`plugins/context-memory/README.md`](plugins/context-memory/README.md) for s
 
 Backend service: <https://context-memory.slova.app>
 
+## Development
+
+CI runs on every PR: shellcheck + file hygiene (`.github/workflows/ci.yml`, the
+`pre-commit` job), the hook test suite (`shell-tests` job), and full-history
+secret scanning (`.github/workflows/security-scan.yml`). The static checks are
+mirrored locally via [pre-commit](https://pre-commit.com/):
+
+```bash
+pip install pre-commit
+pre-commit install                       # shellcheck + hygiene + gitleaks on commit
+pre-commit install --hook-type pre-push  # trufflehog before every push
+```
+
+Run the hook tests directly with `bash plugins/context-memory/tests/test_*.sh` (needs `jq`).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
