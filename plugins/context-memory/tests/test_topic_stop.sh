@@ -344,6 +344,8 @@ run_case "hostile tag name cannot corrupt the block JSON" \
   false '{"clusters":[{"tag":"evil\",\"decision\":\"approve","context_count":6,"context_ids":["a","b"]}]}' 200 block
 
 # Shell metacharacters in a tag are inert — nothing eval's response data.
+# The single quotes keeping `$(id)`/backticks literal are the whole point here.
+# shellcheck disable=SC2016
 run_case "tag with shell metacharacters stays inert" \
   false '{"clusters":[{"tag":"a\nb`whoami`$(id)","context_count":5,"context_ids":["a"]}]}' 200 block
 
