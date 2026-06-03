@@ -1,0 +1,47 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history so the scan covers every commit
+
+      # Run via the image (not gitleaks-action) to avoid the org license key.
+      # Reviewed false positives, if any, are pinned in .gitleaksignore.
+      - name: Run gitleaks
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo" \
+            zricethezav/gitleaks:latest \
+            detect --source=/repo --redact --no-banner --verbose
+
+  trufflehog:
+    name: TruffleHog Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history so the scan covers every commit
+
+      # --only-verified keeps the gate noise-free: it fails only on secrets
+      # TruffleHog can confirm are live against the issuing service.
+      - name: Run trufflehog
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo" \
+            trufflesecurity/trufflehog:latest \
+            git file:///repo --only-verified --fail --no-update

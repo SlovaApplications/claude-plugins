@@ -1,0 +1,29 @@
+# Pre-commit secret scanning for claude-plugins.
+#
+# Requires Docker (the hooks run the scanners as containers, so no Go
+# toolchain or installed binaries are needed).
+#
+# One-time setup:
+#   pip install pre-commit
+#   pre-commit install                       # gitleaks on every commit
+#   pre-commit install --hook-type pre-push  # trufflehog before every push
+#
+# Manual run over the whole repo:
+#   pre-commit run --all-files
+repos:
+  - repo: local
+    hooks:
+      # Fast format/entropy scan of the staged diff — blocks the commit.
+      - id: gitleaks
+        name: gitleaks (secret scan)
+        entry: bash -c 'docker run --rm -v "$(pwd):/repo" zricethezav/gitleaks:latest protect --staged --source=/repo --redact --no-banner --verbose'
+        language: system
+        pass_filenames: false
+
+      # Verified-secret scan of history — runs on push so commits stay fast.
+      - id: trufflehog
+        name: trufflehog (verified secrets)
+        entry: bash -c 'docker run --rm -v "$(pwd):/repo" trufflesecurity/trufflehog:latest git file:///repo --only-verified --fail --no-update'
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
