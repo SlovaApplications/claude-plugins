@@ -23,6 +23,19 @@ This repository ships client-side code that runs locally in your shell on every 
 
 Backend-service vulnerabilities are out of scope for this repository — please email the same address and we'll route the report internally.
 
+## Automated scanning
+
+Every pull request and push to `main` runs [Gitleaks](https://github.com/gitleaks/gitleaks)
+and [TruffleHog](https://github.com/trufflesecurity/trufflehog) over the full
+git history (`.github/workflows/security-scan.yml`). Contributors can also
+enable the matching local pre-commit hooks (requires Docker):
+
+```bash
+pip install pre-commit
+pre-commit install                       # gitleaks on every commit
+pre-commit install --hook-type pre-push  # trufflehog before every push
+```
+
 ## Out of scope
 
 - Reports that require an attacker who already has shell or filesystem access to the user's machine
