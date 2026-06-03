@@ -64,6 +64,12 @@ run_case "blocks on three parallel edits in one assistant message" \
 run_case "allows on non-meaningful Bash (ls) only" \
   "non_meaningful_bash.jsonl" false allow
 
+# Bookkeeping/communication ops (gh issue close/comment, gh pr merge) are
+# deliberately NOT meaningful work: they rarely carry a save-worthy insight,
+# and firing the block on them just forces a "nothing to save" extra turn.
+run_case "allows on bookkeeping (gh issue close) with no save" \
+  "bookkeeping_issue_close.jsonl" false allow
+
 # Substring "git commit" inside a path like git-commit-history.txt must
 # not trip the meaningful-work matcher.
 run_case "allows when 'git commit' appears only as a substring in a filename" \
