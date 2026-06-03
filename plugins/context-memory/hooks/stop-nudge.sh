@@ -31,9 +31,15 @@ fi
 
 MEANINGFUL=0
 
+# Only triggers that tend to coincide with NOVEL learning. Deliberately
+# excludes bookkeeping/communication ops — `gh issue close`, `gh issue
+# comment`, `gh pr merge` — which rarely produce a save-worthy insight on
+# their own (the learning, if any, lives in the commits that led there, and
+# `git commit` already covers those). Firing the block on those just yields a
+# forced extra turn that concludes "nothing to save".
 if printf '%s' "$TOOL_USES" \
   | grep -E '"name":"Bash"' \
-  | grep -qE 'git commit[ "]|gh pr create[ "]|gh pr merge[ "]|gh issue close[ "]|gh issue create[ "]|gh issue comment[ "]'; then
+  | grep -qE 'git commit[ "]|gh pr create[ "]|gh issue create[ "]'; then
   MEANINGFUL=1
 fi
 

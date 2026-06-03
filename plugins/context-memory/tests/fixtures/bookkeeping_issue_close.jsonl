@@ -1,0 +1,4 @@
+{"type":"user","uuid":"u1","message":{"role":"user","content":"close issue 5, it's already fixed"}}
+{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"gh issue close 5 --comment 'already resolved'"}}]}}
+{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"Closed issue #5"}]}}
+{"type":"assistant","uuid":"a2","message":{"role":"assistant","content":[{"type":"text","text":"closed"}]}}
