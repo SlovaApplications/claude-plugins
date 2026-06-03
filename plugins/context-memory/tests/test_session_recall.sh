@@ -90,7 +90,7 @@ test_happy() {
   local out ctx
   out="$(
     STUB_GIT_URL='git@github.com:acme/widgets.git' \
-    STUB_SUMMARY='{"items":[{"body":"Wired the ETL.\n\n## Open items\n- backfill 2023"}]}' \
+    STUB_SUMMARY='{"items":[{"id":"019e-rolling-id","body":"Wired the ETL.\n\n## Open items\n- backfill 2023"}]}' \
     STUB_ORIENTATION='{"items":[{"body":"data-lake is sourced from the app DB"}]}' \
     run_hook
   )"
@@ -100,6 +100,8 @@ test_happy() {
   [ -n "$ctx" ] || { bad "happy path emits additionalContext" "out=$out"; return; }
   printf '%s' "$ctx" | grep -q 'Where you left off'      || { bad "has recall header" "$ctx"; return; }
   printf '%s' "$ctx" | grep -q 'Wired the ETL'           || { bad "has summary body" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'supersede_context'       || { bad "instruction tells agent to supersede the rolling summary" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q '019e-rolling-id'         || { bad "instruction surfaces the current summary id" "$ctx"; return; }
   printf '%s' "$ctx" | grep -q 'Project facts'           || { bad "has project facts header" "$ctx"; return; }
   printf '%s' "$ctx" | grep -q 'sourced from the app DB' || { bad "has orientation body" "$ctx"; return; }
   printf '%s' "$ctx" | grep -q 'git_repo="acme/widgets"' || { bad "instruction has canonical repo" "$ctx"; return; }

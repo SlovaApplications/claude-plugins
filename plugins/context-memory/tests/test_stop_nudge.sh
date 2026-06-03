@@ -42,6 +42,15 @@ run_case "blocks when commit happened with no save" \
 run_case "allows when save_context was called in the same turn" \
   "meaningful_with_save.jsonl" false allow
 
+# A rolling-summary supersede also satisfies the checkpoint (continuity path).
+run_case "allows when supersede_context refreshed the rolling summary" \
+  "meaningful_with_supersede.jsonl" false allow
+
+# A single edit now counts as substantive (>=1), so an un-checkpointed
+# edit-only turn must block.
+run_case "blocks on a single edit with no checkpoint" \
+  "single_edit_no_save.jsonl" false block
+
 run_case "allows on Q&A-only turn (no tool calls)" \
   "qa_only.jsonl" false allow
 
