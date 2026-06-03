@@ -82,6 +82,8 @@ SUMMARY_JSON="$(fetch_contexts session-summary 1)"
 ORIENTATION_JSON="$(fetch_contexts orientation "$ORIENTATION_LIMIT")"
 
 SUMMARY_BODY="$(printf '%s' "$SUMMARY_JSON" | jq -r '.items[0].body // empty' 2>/dev/null)"
+# Surface the id so the agent can supersede (not append to) the rolling summary.
+SUMMARY_ID="$(printf '%s' "$SUMMARY_JSON" | jq -r '.items[0].id // empty' 2>/dev/null)"
 ORIENTATION_BODIES="$(
   printf '%s' "$ORIENTATION_JSON" \
     | jq -r '.items[]? | "- " + ((.body // "") | gsub("\n";" "))' 2>/dev/null
@@ -104,6 +106,17 @@ SURFACE="$(
   } | head -c "$MAX_OUTPUT_BYTES"
 )"
 
+# The rolling-summary line depends on whether one already exists: supersede the
+# current id (keeping a single, always-current row) or create the first one.
+if [ -n "$SUMMARY_ID" ]; then
+  ROLLING_LINE="• ROLLING SESSION STATE — keep one summary current so an interrupted session resumes. After each substantive turn, SUPERSEDE it (don't append a new one):
+  supersede_context(context_id=\"$SUMMARY_ID\", body=\"<where things stand>\n\n## Open items\n- …\", tags=[\"session-summary\"], git_repo=\"$REPO\")
+  Use the new id it returns for the next update this session."
+else
+  ROLLING_LINE="• ROLLING SESSION STATE — no rolling summary exists yet. Create one now, then keep it current by superseding it after each substantive turn:
+  save_context(body=\"<where things stand>\n\n## Open items\n- …\", tags=[\"session-summary\"], git_repo=\"$REPO\")"
+fi
+
 # Built as a plain multi-line double-quoted string (NOT a $(cat <<EOF) here-doc):
 # the instruction text contains apostrophes ("repo's", "it's"), and apostrophes
 # inside a command-substitution-wrapped here-doc confuse bash's parser into
@@ -114,8 +127,7 @@ INSTRUCTION="
 
 ---
 [context-memory — keep this repo's memory current (git_repo=\"$REPO\"):
-• When you finish meaningful work or the user wraps up, save a short session summary:
-  save_context(body=\"<what happened>\n\n## Open items\n- …\", tags=[\"session-summary\"], git_repo=\"$REPO\")
+$ROLLING_LINE
 • When the user states a durable project fact (how it's wired, where things live), capture it once:
   save_context(body=\"<the fact>\", tags=[\"orientation\"], git_repo=\"$REPO\")
 Pass git_repo=\"$REPO\" exactly as written so recall and capture stay aligned.]"
