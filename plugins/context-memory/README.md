@@ -7,7 +7,7 @@ Persistent knowledge base for Claude Code sessions. Automatically retrieves rele
 - **MCP tools** for managing contexts:
   - **Save and search**: `save_context`, `search_contexts`, `get_context`, `delete_context`
   - **Audit and cull**: `list_contexts` (paginated, filterable by repo, source type, tag, and age), `bulk_delete_contexts`
-- **Session recall** (v0.5.0+) that, on `SessionStart`, injects this repo's *"where you left off"* (the latest session summary + its open items) plus durable project facts, and stands up a lightweight instruction so the agent keeps that memory current — scoped per git repo
+- **Session recall** (v0.5.0+) that, on `SessionStart`, injects this repo's *"where you left off"* (the session summary + its open items) plus durable project facts, and stands up a lightweight instruction so the agent keeps that memory current — scoped **per session × git repo** (v0.8.0+), so concurrent or successive sessions don't clobber each other's state
 - **Pre-fetch hook** that searches your context store on every prompt and injects the top hits as additional context for Claude
 - **End-of-turn nudge** (v0.3.0+) that holds the turn open if meaningful work happened (commits, PRs, issue ops, several edits) without a `save_context` call, so learnings actually land in the store instead of getting lost
 - **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered — or explicitly dismissed (v0.4.1+) when a cluster genuinely shouldn't become a Topic
@@ -67,10 +67,14 @@ It **fails open**: if the API key isn't set, the network is unreachable, the req
 On `SessionStart` (startup, resume, or after `/clear`), `session-recall.sh` grounds the session in this repo's memory:
 
 1. Derives a canonical repo id (`owner/repo`) from the working directory's `git` origin remote — the **same key used for capture**, so recall and capture stay aligned.
-2. Fetches the newest `session-summary` Context and all `orientation` Contexts for that repo via `GET /api/v1/contexts` (filtered by `git_repo` + tag, recency-ordered).
-3. Injects them as `additionalContext` — a *"Where you left off"* block (the last summary + its open items) and a *"Project facts"* block — followed by a standing instruction telling the agent to save a `session-summary` at wrap-up and to capture durable project facts as `orientation`, all under this repo's `git_repo`.
+2. Reads the Claude Code `session_id` from the hook input. The rolling summary is scoped **per session × repo**, not per repo: each session keeps its own summary, so concurrent or successive sessions never overwrite each other's end-state.
+3. Fetches `session-summary` + all `orientation` Contexts for that repo via `GET /api/v1/contexts` (filtered by `git_repo` + tag, recency-ordered). It makes two summary fetches: one filtered by the current `session_id` (this session's own doc, present only when resuming) and one for the most recent summary across all sessions.
+4. Injects them as `additionalContext`, branching on session state:
+   - **Resuming** (this session already has a summary): a *"Resuming this session"* block, and the instruction hands back that summary's id so the agent keeps **superseding its own doc**.
+   - **Fresh session**: the most recent prior session's summary as a read-only *"Where you left off (previous session)"* block, and the instruction tells the agent to **create its own** `session-summary` stamped with the current `session_id` (then supersede that — `session_id` carries over automatically). It does **not** touch the previous session's summary.
+   - Plus a *"Project facts"* block from `orientation`, and the standing capture instruction, all under this repo's `git_repo`.
 
-This is how *"where did I leave off?"* and per-project orientation work without you re-typing them each session. Capture is **instruction-driven** — the agent follows the injected reminder — so a missed turn just means a slightly staler summary; nothing breaks.
+This is how *"where did I leave off?"* and per-project orientation work without you re-typing them each session. Capture is **instruction-driven** — the agent follows the injected reminder — so a missed turn just means a slightly staler summary; nothing breaks. (If the client doesn't supply a `session_id`, the hook falls back to a single repo-wide rolling summary.)
 
 It **fails open** on everything (no git repo, missing key, unreachable backend, non-2xx): it injects nothing rather than ever erroring at session start. Outside a git repo it does nothing at all.
 

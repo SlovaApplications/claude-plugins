@@ -59,6 +59,6 @@ fi
 
 jq -nc '{
   decision: "block",
-  reason: "context-memory nudge: this turn advanced the work but did not checkpoint session state. Refresh the rolling session-summary so an interrupted session can resume — supersede the current session-summary (its id was injected by the SessionStart recall; use the new id after each update) with where things stand + open items: supersede_context(context_id=\"<current>\", body=\"…\\n\\n## Open items\\n- …\", tags=[\"session-summary\"]). Capture any novel lesson (the WHY/gotcha) as its own save_context too. If nothing changed worth recording, say so in one line and stop again — this will not fire twice."
+  reason: "context-memory nudge: this turn advanced the work but did not checkpoint session state. Refresh THIS session'\''s rolling summary so an interrupted session can resume — follow the SessionStart recall'\''s instruction: if it gave you a summary id, supersede it; if this is a fresh session, create one with save_context(..., tags=[\"session-summary\"], session_id=\"<the id from recall>\") and supersede the id it returns after each update (session_id carries over). Body = where things stand + open items: \"…\\n\\n## Open items\\n- …\". Capture any novel lesson (the WHY/gotcha) as its own save_context too. If nothing changed worth recording, say so in one line and stop again — this will not fire twice."
 }'
 exit 0
