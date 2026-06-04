@@ -10,11 +10,18 @@ HOOK="$DIR/../hooks/session-recall.sh"
 PASS=0
 FAIL=0
 
-PAYLOAD='{"hook_event_name":"SessionStart","source":"startup","cwd":"/tmp/proj"}'
+# Default payload carries a session_id — the rolling summary is per-session now.
+# Individual tests override PAYLOAD (e.g. to drop session_id) before run_hook.
+PAYLOAD='{"hook_event_name":"SessionStart","source":"startup","cwd":"/tmp/proj","session_id":"sess-abc"}'
 
 # Build stub `git` + `curl` on a temp PATH. Both read their behavior from env
 # at exec time (STUB_GIT_URL / STUB_GIT_TOPLEVEL / STUB_SUMMARY /
-# STUB_ORIENTATION / STUB_STATUS) so test bodies can hold any characters.
+# STUB_SUMMARY_OWN / STUB_ORIENTATION / STUB_STATUS) so test bodies can hold
+# any characters.
+#
+# The curl stub distinguishes the two session-summary fetches the hook makes:
+#   - session-scoped fetch (carries session_id=) → STUB_SUMMARY_OWN (resume)
+#   - latest fetch (no session_id)               → STUB_SUMMARY (prior session)
 make_stubs() {
   local d
   d="$(mktemp -d)" || {
@@ -41,7 +48,11 @@ STUB
 #!/bin/bash
 args="$*"
 if printf '%s' "$args" | grep -q 'tag=session-summary'; then
-  printf '%s' "${STUB_SUMMARY:-}"
+  if printf '%s' "$args" | grep -q 'session_id='; then
+    printf '%s' "${STUB_SUMMARY_OWN:-}"
+  else
+    printf '%s' "${STUB_SUMMARY:-}"
+  fi
 elif printf '%s' "$args" | grep -q 'tag=orientation'; then
   printf '%s' "${STUB_ORIENTATION:-}"
 fi
@@ -66,6 +77,7 @@ run_hook() {
         STUB_GIT_URL="${STUB_GIT_URL-}" \
         STUB_GIT_TOPLEVEL="${STUB_GIT_TOPLEVEL-}" \
         STUB_SUMMARY="${STUB_SUMMARY-}" \
+        STUB_SUMMARY_OWN="${STUB_SUMMARY_OWN-}" \
         STUB_ORIENTATION="${STUB_ORIENTATION-}" \
         STUB_STATUS="${STUB_STATUS-200}" \
         bash "$HOOK" 2>/dev/null
@@ -83,32 +95,99 @@ bad()  { printf '  FAIL  %s\n        %s\n' "$1" "${2:-}"; FAIL=$((FAIL + 1)); }
 
 echo "session-recall.sh smoke tests"
 
-# 1. Happy path: repo + summary + orientation → valid SessionStart JSON whose
-#    additionalContext carries the recall, the project facts, and the capture
-#    instruction with the canonical owner/repo git_repo.
-test_happy() {
+# 1. Resume: this session already has its own summary (session-scoped fetch
+#    returns it) → surface it as "Resuming this session" and instruct the agent
+#    to SUPERSEDE its own id (continue the same doc), not start a new one.
+test_resume() {
   local out ctx
   out="$(
+    PAYLOAD='{"hook_event_name":"SessionStart","source":"resume","cwd":"/tmp/proj","session_id":"sess-abc"}' \
     STUB_GIT_URL='git@github.com:acme/widgets.git' \
-    STUB_SUMMARY='{"items":[{"id":"019e-rolling-id","body":"Wired the ETL.\n\n## Open items\n- backfill 2023"}]}' \
+    STUB_SUMMARY_OWN='{"items":[{"id":"019e-own-id","session_id":"sess-abc","body":"Resumed the ETL.\n\n## Open items\n- backfill 2023"}]}' \
+    STUB_SUMMARY='{"items":[{"id":"019e-own-id","session_id":"sess-abc","body":"Resumed the ETL."}]}' \
     STUB_ORIENTATION='{"items":[{"body":"data-lake is sourced from the app DB"}]}' \
     run_hook
   )"
   EXIT=$?
-  [ "$EXIT" -eq 0 ] || { bad "happy path exits 0" "exit=$EXIT"; return; }
+  [ "$EXIT" -eq 0 ] || { bad "resume exits 0" "exit=$EXIT"; return; }
   ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
-  [ -n "$ctx" ] || { bad "happy path emits additionalContext" "out=$out"; return; }
-  printf '%s' "$ctx" | grep -q 'Where you left off'      || { bad "has recall header" "$ctx"; return; }
-  printf '%s' "$ctx" | grep -q 'Wired the ETL'           || { bad "has summary body" "$ctx"; return; }
-  printf '%s' "$ctx" | grep -q 'supersede_context'       || { bad "instruction tells agent to supersede the rolling summary" "$ctx"; return; }
-  printf '%s' "$ctx" | grep -q '019e-rolling-id'         || { bad "instruction surfaces the current summary id" "$ctx"; return; }
-  printf '%s' "$ctx" | grep -q 'Project facts'           || { bad "has project facts header" "$ctx"; return; }
-  printf '%s' "$ctx" | grep -q 'sourced from the app DB' || { bad "has orientation body" "$ctx"; return; }
-  printf '%s' "$ctx" | grep -q 'git_repo="acme/widgets"' || { bad "instruction has canonical repo" "$ctx"; return; }
-  ok "happy path injects recall + facts + capture instruction (canonical repo)"
+  [ -n "$ctx" ] || { bad "resume emits additionalContext" "out=$out"; return; }
+  printf '%s' "$ctx" | grep -q 'Resuming this session' || { bad "resume header" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'Resumed the ETL'        || { bad "resume body" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'supersede_context'      || { bad "resume → supersede own doc" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q '019e-own-id'            || { bad "resume surfaces own id" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'sourced from the app DB' || { bad "resume has orientation" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'git_repo="acme/widgets"' || { bad "resume canonical repo" "$ctx"; return; }
+  ok "resume → surfaces own summary + supersede-own instruction"
 }
 
-# 2. No git remote and no toplevel → nothing to scope to → exit 0, no output.
+# 2. Fresh session with a prior summary from a DIFFERENT session: show the prior
+#    body READ-ONLY ("previous session"), and instruct the agent to CREATE its
+#    own session-scoped summary — NOT supersede the prior one (its id must not
+#    even appear, so the agent can't accidentally clobber it).
+test_fresh_with_prior() {
+  local out ctx
+  out="$(
+    STUB_GIT_URL='git@github.com:acme/widgets.git' \
+    STUB_SUMMARY_OWN='{"items":[]}' \
+    STUB_SUMMARY='{"items":[{"id":"019e-prev-id","session_id":"sess-OLD","body":"Previous session wired the ETL."}]}' \
+    STUB_ORIENTATION='{"items":[]}' \
+    run_hook
+  )"
+  EXIT=$?
+  [ "$EXIT" -eq 0 ] || { bad "fresh-with-prior exits 0" "exit=$EXIT"; return; }
+  ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+  printf '%s' "$ctx" | grep -q 'previous session'                || { bad "shows previous-session header" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'Previous session wired the ETL'  || { bad "shows prior body read-only" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'save_context'                    || { bad "fresh → create own via save_context" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'session_id="sess-abc"'           || { bad "fresh → stamps current session_id" "$ctx"; return; }
+  if printf '%s' "$ctx" | grep -q '019e-prev-id'; then
+    bad "fresh must NOT expose the prior id (no accidental supersede)" "$ctx"; return
+  fi
+  ok "fresh+prior → prior shown read-only, create own session-scoped summary"
+}
+
+# 3. Fresh session, no prior summary at all → empty-state line + create-own
+#    instruction stamped with the current session_id.
+test_no_prior_summary() {
+  local out ctx
+  out="$(
+    STUB_GIT_URL='git@github.com:acme/widgets.git' \
+    STUB_SUMMARY_OWN='{"items":[]}' \
+    STUB_SUMMARY='{"items":[]}' \
+    STUB_ORIENTATION='{"items":[]}' \
+    run_hook
+  )"
+  EXIT=$?
+  [ "$EXIT" -eq 0 ] || { bad "no-prior exits 0" "exit=$EXIT"; return; }
+  ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+  printf '%s' "$ctx" | grep -q 'No prior session recorded' || { bad "no-prior shows empty-state line" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'save_context'              || { bad "no-prior → create own" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'session_id="sess-abc"'     || { bad "no-prior stamps session_id" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'git_repo="acme/widgets"'   || { bad "no-prior injects capture instruction" "$ctx"; return; }
+  ok "no prior summary → empty-state + create-own instruction"
+}
+
+# 4. No session_id in the payload (older client) → fall back to repo-only
+#    rolling: supersede the latest summary's id, as before.
+test_no_session_id_fallback() {
+  local out ctx
+  out="$(
+    PAYLOAD='{"hook_event_name":"SessionStart","source":"startup","cwd":"/tmp/proj"}' \
+    STUB_GIT_URL='git@github.com:acme/widgets.git' \
+    STUB_SUMMARY='{"items":[{"id":"019e-rolling-id","body":"Wired the ETL."}]}' \
+    run_hook
+  )"
+  EXIT=$?
+  [ "$EXIT" -eq 0 ] || { bad "fallback exits 0" "exit=$EXIT"; return; }
+  ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+  printf '%s' "$ctx" | grep -q 'Where you left off'  || { bad "fallback recall header" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q 'supersede_context'   || { bad "fallback supersedes latest" "$ctx"; return; }
+  printf '%s' "$ctx" | grep -q '019e-rolling-id'     || { bad "fallback surfaces latest id" "$ctx"; return; }
+  ok "no session_id → repo-only fallback (supersede latest)"
+}
+
+# 5. No git remote and no toplevel → nothing to scope to → exit 0, no output.
 test_no_repo() {
   local out
   out="$(STUB_GIT_URL='' STUB_GIT_TOPLEVEL='' run_hook)"
@@ -120,7 +199,7 @@ test_no_repo() {
   fi
 }
 
-# 3. Missing API key → FAIL OPEN (exit 0, no output). Divergence from
+# 6. Missing API key → FAIL OPEN (exit 0, no output). Divergence from
 #    prefetch.sh on purpose: a SessionStart hook must not error at session start.
 test_missing_key() {
   local out
@@ -133,25 +212,7 @@ test_missing_key() {
   fi
 }
 
-# 4. No prior summary (empty items) → still emits, with the "no prior session"
-#    line AND the capture instruction (so memory can start flowing).
-test_no_prior_summary() {
-  local out ctx
-  out="$(
-    STUB_GIT_URL='git@github.com:acme/widgets.git' \
-    STUB_SUMMARY='{"items":[]}' \
-    STUB_ORIENTATION='{"items":[]}' \
-    run_hook
-  )"
-  EXIT=$?
-  [ "$EXIT" -eq 0 ] || { bad "no-prior exits 0" "exit=$EXIT"; return; }
-  ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
-  printf '%s' "$ctx" | grep -q 'No prior session recorded' || { bad "no-prior shows empty-state line" "$ctx"; return; }
-  printf '%s' "$ctx" | grep -q 'git_repo="acme/widgets"'   || { bad "no-prior still injects capture instruction" "$ctx"; return; }
-  ok "no prior summary → empty-state + capture instruction still injected"
-}
-
-# 5. Non-HTTPS, non-localhost URL → refuse (fail open, no output) so the key
+# 7. Non-HTTPS, non-localhost URL → refuse (fail open, no output) so the key
 #    can't leak over cleartext.
 test_cleartext_url() {
   local out
@@ -164,7 +225,7 @@ test_cleartext_url() {
   fi
 }
 
-# 6. Backend 5xx on the fetches → recall degrades gracefully (empty-state) but
+# 8. Backend 5xx on the fetches → recall degrades gracefully (empty-state) but
 #    the hook still emits the capture instruction. Never errors the session.
 test_backend_5xx() {
   local out ctx
@@ -180,10 +241,10 @@ test_backend_5xx() {
   ok "backend 5xx → recall degrades, capture instruction still injected"
 }
 
-# 7. ssh and https remotes derive the same canonical owner/repo.
+# 9. ssh and https remotes derive the same canonical owner/repo.
 test_repo_derivation() {
   local out ctx
-  out="$(STUB_GIT_URL='https://github.com/acme/widgets.git' STUB_SUMMARY='{"items":[]}' run_hook)"
+  out="$(STUB_GIT_URL='https://github.com/acme/widgets.git' STUB_SUMMARY='{"items":[]}' STUB_SUMMARY_OWN='{"items":[]}' run_hook)"
   ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
   if printf '%s' "$ctx" | grep -q 'git_repo="acme/widgets"'; then
     ok "https remote derives same canonical owner/repo as ssh"
@@ -192,10 +253,12 @@ test_repo_derivation() {
   fi
 }
 
-test_happy
+test_resume
+test_fresh_with_prior
+test_no_prior_summary
+test_no_session_id_fallback
 test_no_repo
 test_missing_key
-test_no_prior_summary
 test_cleartext_url
 test_backend_5xx
 test_repo_derivation
