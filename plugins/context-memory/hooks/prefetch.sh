@@ -160,6 +160,11 @@ CONTEXT_COUNT="$(printf '%s' "$RESPONSE" | jq '[.[] | select(.type != "topic")] 
   printf '[context-memory: %s relevant result(s) from prior sessions]\n\n' "$COUNT"
   printf '%s' "$RESPONSE" | jq -r '
     def clip($n): if (. | length) > $n then .[0:$n] + "…" else . end;
+    # Derived load-bearing tier (#68): "proven" / "established" render inside
+    # the marker as "[Context · proven]"; the bottom tier is null/absent and
+    # renders nothing, so new-but-relevant content reads as neutral, not "low".
+    # Tolerates the field being missing (older backend) → no marker.
+    def tiermark: if (.load_bearing_tier // "") != "" then " · " + .load_bearing_tier else "" end;
     # Topics first (compiled understanding), then Contexts (the supporting
     # source notes). Relevance order is preserved within each group, so the
     # agent meets the synthesis before the atoms it was built from.
@@ -167,12 +172,12 @@ CONTEXT_COUNT="$(printf '%s' "$RESPONSE" | jq '[.[] | select(.type != "topic")] 
     | .[]
     | (
         if .type == "topic" then
-          "### [Topic] " + ((.title // "(untitled topic)") | clip(120))
+          "### [Topic" + tiermark + "] " + ((.title // "(untitled topic)") | clip(120))
           + "\n" + ((.overview // "") | clip(280))
         else
           ((.body // "") | split("\n")) as $lines
           | (($lines[0] // "") | sub("^#+[[:space:]]*"; "")) as $head
-          | "### [Context] " + (if ($head | test("[^[:space:]]")) then ($head | clip(120))
+          | "### [Context" + tiermark + "] " + (if ($head | test("[^[:space:]]")) then ($head | clip(120))
                       else "(untitled context)" end)
           + "\n" + (($lines[1:] | join("\n")) | clip(280))
         end
