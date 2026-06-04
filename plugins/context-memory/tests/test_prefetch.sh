@@ -195,6 +195,43 @@ run_render_contexts_case() {
   PASS=$((PASS + 1))
 }
 
+# Load-bearing tier (#68): a result carrying load_bearing_tier renders it inside
+# the marker ([Context · proven]); a result with no tier (null/absent) renders
+# the bare [Context] marker — backward-compatible with an older backend.
+run_render_tier_case() {
+  local stub_dir stdout_out exit_code
+  stub_dir="$(make_curl_stub)" || exit 1
+  stdout_out="$(
+    printf '{"prompt":"hi"}' \
+      | PATH="$stub_dir:$PATH" \
+        CONTEXT_MEMORY_API_KEY=cm_test \
+        STUB_BODY='[{"type":"context","id":"c1","body":"proven note","tags":[],"load_bearing_tier":"proven"},{"type":"context","id":"c2","body":"fresh note","tags":[],"load_bearing_tier":null}]' \
+        STUB_STATUS=200 \
+        bash "$HOOK" 2>/dev/null
+  )"
+  exit_code=$?
+  rm -rf "$stub_dir"
+
+  if [ "$exit_code" -ne 0 ]; then
+    printf '  FAIL  tier render — expected exit 0, got %s\n' "$exit_code"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  if ! printf '%s' "$stdout_out" | grep -qF '[Context · proven]'; then
+    printf '  FAIL  tier render — proven tier not in marker\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  # The untiered result must render the bare marker, not an empty " · " suffix.
+  if ! printf '%s' "$stdout_out" | grep -qF '[Context]'; then
+    printf '  FAIL  tier render — untiered context should render bare [Context]\n        stdout: %s\n' "$stdout_out"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  printf '  PASS  load-bearing tier renders in the marker; untiered stays bare\n'
+  PASS=$((PASS + 1))
+}
+
 # Success render — a Topic is present. The Topic renders with its [Topic]
 # marker, and the synthesis nudge must NOT fire: a Topic already covers the
 # cluster, so nudging the agent to create another would be noise.
@@ -417,6 +454,7 @@ run_transient_fail_case 500
 run_transient_fail_case 429
 run_quote_in_body_case
 run_render_contexts_case
+run_render_tier_case
 run_render_topic_case
 run_usage_guidance_case
 run_context_marker_case
