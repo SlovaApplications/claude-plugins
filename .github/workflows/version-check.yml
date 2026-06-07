@@ -1,0 +1,53 @@
+name: Version check
+
+# Fails a PR that changes the published plugin without bumping its
+# plugin.json version. The version is what Claude Code reads and how the
+# marketplace decides a newer release is available, so a behavior change that
+# forgets the bump silently ships to nobody.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  plugin-version-bump:
+    name: Plugin version bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Require a plugin.json version bump when the plugin changes
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          PJ=plugins/context-memory/.claude-plugin/plugin.json
+          git fetch origin "$BASE" --depth=1
+          base="origin/$BASE"
+
+          # Release-worthy changes = anything under the plugin except docs.
+          changed=$(git diff --name-only "$base"...HEAD -- plugins/context-memory \
+            ':(exclude)plugins/context-memory/README.md' \
+            ':(exclude)plugins/context-memory/CHANGELOG.md' || true)
+          if [ -z "$changed" ]; then
+            echo "No release-worthy plugin changes — version bump not required."
+            exit 0
+          fi
+
+          new=$(jq -r .version "$PJ")
+          old=$(git show "$base:$PJ" | jq -r .version)
+          echo "Changed plugin files:"; echo "$changed" | sed 's/^/  /'
+          echo "plugin.json version: $old (base) -> $new (PR)"
+
+          if [ "$new" = "$old" ]; then
+            echo "::error file=$PJ::plugins/context-memory changed but the version is still $old. Bump it (semver) — see CLAUDE.md."
+            exit 1
+          fi
+          highest=$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)
+          if [ "$highest" != "$new" ]; then
+            echo "::error file=$PJ::Version went backwards ($old -> $new). Use a higher semver."
+            exit 1
+          fi
+          echo "OK: version bumped $old -> $new"
