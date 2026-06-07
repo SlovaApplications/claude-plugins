@@ -64,7 +64,7 @@ It **fails open**: if the API key isn't set, the network is unreachable, the req
 
 ## How the session-recall hook works
 
-On `SessionStart` (startup, resume, or after `/clear`), `session-recall.sh` grounds the session in this repo's memory:
+On `SessionStart` (startup, resume, or after `/clear`), `session-recall.mjs` grounds the session in this repo's memory:
 
 1. Derives a canonical repo id (`owner/repo`) from the working directory's `git` origin remote — the **same key used for capture**, so recall and capture stay aligned.
 2. Reads the Claude Code `session_id` from the hook input. The rolling summary is scoped **per session × repo**, not per repo: each session keeps its own summary, so concurrent or successive sessions never overwrite each other's end-state.
@@ -84,15 +84,15 @@ When Claude tries to end a turn, the `Stop` hook scans this turn's events (every
 
 A separate `PostToolUse` hook on `Bash` also injects a soft hint right after a commit/PR/issue command, so the model has the prompt fresh in context when it next pauses to think.
 
-Both hooks **fail open**: a missing transcript, missing `jq`, or any unexpected input causes them to exit silently and let Claude stop normally.
+Both hooks **fail open**: a missing transcript or any unexpected input causes them to exit silently and let Claude stop normally.
 
 ## How the topic-synthesis hook works
 
-A second `Stop` hook (`topic-stop.sh`) makes sure accumulated knowledge gets compiled. When Claude tries to end a turn, it calls `GET /api/v1/contexts/cluster-suggestions`: the backend reports any tag carrying enough live Contexts to warrant a Topic but with no Topic covering it. If any such cluster exists, the hook returns `decision: "block"` with the tag, the Context count, and the exact `context_ids` — so Claude can call `create_topic` and attach them in one step. If Claude judges a cluster should not become a Topic — a generic label, or Contexts too scattered to cohere under one scope — it calls `dismiss_cluster` instead, and that cluster stops being flagged on future turns.
+A second `Stop` hook (`topic-stop.mjs`) makes sure accumulated knowledge gets compiled. When Claude tries to end a turn, it calls `GET /api/v1/contexts/cluster-suggestions`: the backend reports any tag carrying enough live Contexts to warrant a Topic but with no Topic covering it. If any such cluster exists, the hook returns `decision: "block"` with the tag, the Context count, and the exact `context_ids` — so Claude can call `create_topic` and attach them in one step. If Claude judges a cluster should not become a Topic — a generic label, or Contexts too scattered to cohere under one scope — it calls `dismiss_cluster` instead, and that cluster stops being flagged on future turns.
 
 Detecting clusters costs no tokens — it is a single database query. Claude spends tokens only on the synthesis itself, where it still has the full session in context.
 
-This hook **fails open too**: a missing API key, missing `jq`/`curl`, a network error, or any non-2xx response lets Claude stop normally. Unlike the pre-fetch hook it never hard-fails on a missing key — a `Stop` hook that errored out would leave Claude unable to ever end a turn.
+This hook **fails open too**: a missing API key, a network error, or any non-2xx response lets Claude stop normally. Unlike the pre-fetch hook it never hard-fails on a missing key — a `Stop` hook that errored out would leave Claude unable to ever end a turn.
 
 The first auto-call to `save_context` may trigger a permission prompt. To make it fully silent, allow it once or pre-allowlist it in `~/.claude/settings.json`:
 
@@ -108,8 +108,8 @@ The first auto-call to `save_context` may trigger a permission prompt. To make i
 
 ## Requirements
 
-- Claude Code (latest)
-- `curl` and `jq` on your `PATH` (both are standard on macOS and most Linux distros)
+- Claude Code (latest). The hooks are Node scripts that run on the Node.js bundled with Claude Code — there are no other dependencies to install, on **macOS, Linux, or Windows**.
+- `git` is used only for the per-repo session recall; outside a git repo that hook simply no-ops.
 
 ## License
 

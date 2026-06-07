@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-recall.sh",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-recall.mjs\"",
             "timeout": 6
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/prefetch.sh",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/prefetch.mjs\"",
             "timeout": 3
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-bash-nudge.sh",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/post-bash-nudge.mjs\"",
             "timeout": 2
           }
         ]
@@ -39,12 +39,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop-nudge.sh",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-nudge.mjs\"",
             "timeout": 3
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/topic-stop.sh",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/topic-stop.mjs\"",
             "timeout": 4
           }
         ]
