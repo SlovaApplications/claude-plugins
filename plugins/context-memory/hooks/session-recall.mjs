@@ -104,7 +104,6 @@ try {
   const orientationBodies = orientationItems
     .map((i) => '- ' + String(i?.body || '').replace(/\n/g, ' '))
     .join('\n');
-  const orientationCount = orientationItems.length;
 
   // Build the surfaced memory (byte-capped); the capture instruction is
   // appended unconditionally outside the cap so a long summary can never
@@ -153,26 +152,7 @@ ${rollingLine}
   save_context(body="<the fact>", tags=["orientation"], git_repo="${repo}")
 Pass git_repo="${repo}" exactly as written so recall and capture stay aligned.]`;
 
-  // User-visible banner. SessionStart hook output is injected into the agent's
-  // context, never printed to the user's terminal — so to give a visible
-  // "memory loaded" signal we ask the AGENT to echo one line first.
-  let recallState;
-  if (ownId) recallState = "resumed this session's working memory";
-  else if (latestBody) recallState = 'recalled where you left off';
-  else recallState = 'no prior session memory yet';
-
-  const bannerLine =
-    orientationCount > 0
-      ? `context-memory: ${recallState} + ${orientationCount} project fact(s) for ${repo}`
-      : `context-memory: ${recallState} for ${repo}`;
-
-  const bannerDirective = `[context-memory · session-start banner — REQUIRED]
-Begin your very first reply in this session with this line verbatim, on its own line, before anything else (then continue your response as normal):
-${bannerLine}
-
-`;
-
-  const additionalContext = bannerDirective + surface + instruction;
+  const additionalContext = surface + instruction;
 
   emit({
     hookSpecificOutput: {

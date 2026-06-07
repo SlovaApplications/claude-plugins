@@ -217,8 +217,8 @@ console.log('session-recall.mjs');
     }
   })();
   check(
-    'fresh session → banner + previous-session block + 2 facts',
-    freshCtx.includes('session-start banner') &&
+    'fresh session → previous-session block + 2 facts (no banner)',
+    !freshCtx.includes('session-start banner') &&
       freshCtx.includes('Where you left off (previous session)') &&
       freshCtx.includes('LATEST BODY') &&
       freshCtx.includes('- fact one') &&
