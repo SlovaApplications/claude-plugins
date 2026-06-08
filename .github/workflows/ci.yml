@@ -49,3 +49,6 @@ jobs:
       # for the API, so nothing touches a real repo or the production backend.
       - name: Run hook test suite
         run: node plugins/context-memory/tests/run.mjs
+
+      - name: Run bootstrap-command test suite
+        run: node plugins/context-memory/tests/run-bootstrap.mjs
