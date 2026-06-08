@@ -25,9 +25,12 @@ sessions (trivial/command-only).
 
 ## Step 2 — Idempotency gate (skip already-bootstrapped sessions)
 
-Call `search_contexts` / list the KB for contexts with `source_type=session-history`
-and collect the `session_id` of each. **Skip any session whose `sessionId`
-already appears** — bootstrap is idempotent: a second run must make no changes.
+Bootstrap must be idempotent: a second run makes no changes. For each
+substantive session, do an existence check with `list_contexts` filtered by
+**both** `source_type="session-history"` and `session_id="<that sessionId>"`
+(`limit` 1). If it returns any context, that session was already bootstrapped —
+**skip it**. (Filter by `session_id`; don't try to read it back from the
+result text — `list_contexts` renders only id/body-head/tags, not `session_id`.)
 If every substantive session is already processed, say so and stop.
 
 ## Step 3 — Distill each remaining session
