@@ -11,7 +11,7 @@ Persistent knowledge base for Claude Code sessions. Automatically retrieves rele
 - **Pre-fetch hook** that searches your context store on every prompt and injects the top hits as additional context for Claude
 - **End-of-turn nudge** (v0.3.0+) that holds the turn open if meaningful work happened (commits, PRs, issue ops, several edits) without a `save_context` call, so learnings actually land in the store instead of getting lost
 - **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered — or explicitly dismissed (v0.4.1+) when a cluster genuinely shouldn't become a Topic
-- **`/bootstrap-memory` command** (v0.10.0+) that seeds an empty knowledge base from your *existing* Claude Code session history: it distills durable knowledge out of this repo's past transcripts into Contexts and Topics, so a new install starts populated instead of blank
+- **`/bootstrap-memory` command** (v0.10.0+) that seeds an empty knowledge base from your *existing* Claude Code session history: it distills durable knowledge out of past transcripts into Contexts and Topics, so a new install starts populated instead of blank — the current repo by default, or every project with `/bootstrap-memory all` (v0.11.0+)
 
 Backend service: <https://context-memory.slova.app>
 
@@ -129,6 +129,12 @@ sessions:
 
 It is **idempotent**: each write records the originating session, so a second
 run skips sessions it has already processed and makes no changes.
+
+By default it scopes to the **current repo**. Run `/bootstrap-memory all`
+(v0.11.0+) to seed from **every** project under `~/.claude/projects` — each
+atom is tagged with its own repo (`git_repo`) so it stays filterable. The
+dedup + preview gate matter even more in `all` mode, since it also surfaces
+non-dev and local-only directories.
 
 ## Requirements
 

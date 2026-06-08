@@ -16,6 +16,7 @@ import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 export const MAX_TEXT_BLOCK = 4000; // cap one prose block so a dump can't dominate
 
@@ -181,13 +182,39 @@ export function sessionsToProcess(allSessionIds, alreadyProcessed) {
   return todo;
 }
 
+// --- repo attribution -----------------------------------------------------
+// Parse a git remote URL into `owner/repo` — the form contexts are tagged with
+// (git_repo). Pure (no I/O) so it's unit-testable; handles ssh + https + .git +
+// trailing slash. Returns null if it doesn't look like an owner/repo remote.
+export function parseGitRemote(url) {
+  if (!url) return null;
+  const m = String(url).trim().match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?\/?$/);
+  return m ? m[1] : null;
+}
+
+// Derive `owner/repo` for a working directory by asking git. Returns null if the
+// path is gone / not a git repo / has no origin (the all-repos run then falls
+// back to leaving git_repo unset for that session).
+function deriveGitRepo(cwd) {
+  if (!cwd) return null;
+  try {
+    const url = execFileSync('git', ['-C', cwd, 'remote', 'get-url', 'origin'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    return parseGitRemote(url);
+  } catch {
+    return null;
+  }
+}
+
 // --- CLI ------------------------------------------------------------------
 // Usage:
-//   bootstrap-extract.mjs list <cwd>              -> JSON: substantive sessions
-//   bootstrap-extract.mjs digest <transcript.jsonl>
-function listSessions(cwd) {
-  const dir = join(projectsRoot(), encodeProjectDir(cwd));
-  if (!existsSync(dir)) return [];
+//   bootstrap-extract.mjs list <cwd>      -> substantive sessions for one repo
+//   bootstrap-extract.mjs list-all        -> sessions across ALL ~/.claude/projects,
+//                                            each tagged with its cwd + gitRepo
+//   bootstrap-extract.mjs digest <file>   -> the signal-only digest for one session
+function sessionsInDir(dir, gitRepo, cwd) {
   return readdirSync(dir)
     .filter((f) => f.endsWith('.jsonl'))
     .map((f) => {
@@ -198,10 +225,48 @@ function listSessions(cwd) {
         title: d.title,
         userTurns: d.userTurns,
         assistantTurns: d.assistantTurns,
-        substantive: isSubstantive(d)
+        substantive: isSubstantive(d),
+        cwd: cwd ?? d.repo,
+        gitRepo: gitRepo ?? null
       };
     })
     .filter((s) => s.sessionId);
+}
+
+function listSessions(cwd) {
+  const dir = join(projectsRoot(), encodeProjectDir(cwd));
+  if (!existsSync(dir)) return [];
+  return sessionsInDir(dir, deriveGitRepo(cwd), cwd);
+}
+
+// Every project under ~/.claude/projects. Each dir maps to one cwd (stored in
+// its transcripts); derive cwd+gitRepo ONCE per dir, then tag every session.
+function listAllSessions() {
+  const root = projectsRoot();
+  if (!existsSync(root)) return [];
+  const out = [];
+  for (const dirName of readdirSync(root)) {
+    const dir = join(root, dirName);
+    let files;
+    try {
+      files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      continue; // not a directory / unreadable
+    }
+    if (!files.length) continue;
+    // cwd is the same for every session in the dir — read it from the first
+    // parseable transcript, then derive the repo once.
+    let cwd = '';
+    for (const f of files) {
+      const d = extractDigest(readFileSync(join(dir, f), 'utf8'));
+      if (d.repo) {
+        cwd = d.repo;
+        break;
+      }
+    }
+    out.push(...sessionsInDir(dir, deriveGitRepo(cwd), cwd));
+  }
+  return out;
 }
 
 // Robust "is this the entry script?" check: comparing import.meta.url to a
@@ -220,10 +285,14 @@ if (isMainModule()) {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === 'list') {
     process.stdout.write(JSON.stringify(listSessions(arg || process.cwd()), null, 2));
+  } else if (cmd === 'list-all') {
+    process.stdout.write(JSON.stringify(listAllSessions(), null, 2));
   } else if (cmd === 'digest') {
     process.stdout.write(renderDigest(extractDigest(readFileSync(arg, 'utf8'))));
   } else {
-    process.stderr.write('usage: bootstrap-extract.mjs list <cwd> | digest <file.jsonl>\n');
+    process.stderr.write(
+      'usage: bootstrap-extract.mjs list <cwd> | list-all | digest <file.jsonl>\n'
+    );
     process.exit(2);
   }
 }
