@@ -52,7 +52,12 @@ try {
   const toolUsesText = toolUses.join('\n');
 
   // A save OR a rolling-summary supersede this turn satisfies the checkpoint.
-  if (/"name":"mcp__context-memory__(save_context|supersede_context)"/.test(toolUsesText)) {
+  // Match the tool name prefix-agnostically: a plugin-provided MCP server is
+  // namespaced by Claude Code as `mcp__plugin_<plugin>_<server>__<tool>` (e.g.
+  // mcp__plugin_context-memory_context-memory__save_context), while a directly
+  // configured server is `mcp__<server>__<tool>`. `[^"]*` around `context-memory`
+  // accepts both without crossing the JSON string boundary.
+  if (/"name":"mcp__[^"]*context-memory[^"]*__(save_context|supersede_context)"/.test(toolUsesText)) {
     process.exit(0);
   }
 

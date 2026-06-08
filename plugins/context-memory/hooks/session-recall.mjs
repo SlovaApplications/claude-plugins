@@ -84,22 +84,22 @@ try {
     return res.json;
   }
 
-  // This session's own rolling summary, if it has written one (resume case).
-  let ownId = '';
-  let ownBody = '';
-  if (sessionId) {
-    const own = await fetchContexts('session-summary', 1, sessionId);
-    ownId = own?.items?.[0]?.id || '';
-    ownBody = own?.items?.[0]?.body || '';
-  }
-
-  // The most recent summary for this repo across all sessions — "where you
-  // left off" when this is a fresh session.
-  const latest = await fetchContexts('session-summary', 1);
+  // Fetch the three recall sources concurrently. They're independent, and run
+  // sequentially they could spend up to 3×TIMEOUT — over the SessionStart hook's
+  // budget on a cold backend, killing recall when it's most needed.
+  //   - own: this session's own rolling summary (resume case), if any
+  //   - latest: the most recent summary for this repo across all sessions
+  //     ("where you left off" on a fresh session)
+  //   - orientation: durable project facts
+  const [own, latest, orientation] = await Promise.all([
+    sessionId ? fetchContexts('session-summary', 1, sessionId) : Promise.resolve(null),
+    fetchContexts('session-summary', 1),
+    fetchContexts('orientation', ORIENTATION_LIMIT)
+  ]);
+  const ownId = own?.items?.[0]?.id || '';
+  const ownBody = own?.items?.[0]?.body || '';
   const latestBody = latest?.items?.[0]?.body || '';
   const latestId = latest?.items?.[0]?.id || '';
-
-  const orientation = await fetchContexts('orientation', ORIENTATION_LIMIT);
   const orientationItems = Array.isArray(orientation?.items) ? orientation.items : [];
   const orientationBodies = orientationItems
     .map((i) => '- ' + String(i?.body || '').replace(/\n/g, ' '))

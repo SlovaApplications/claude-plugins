@@ -21,7 +21,9 @@ import {
 } from './lib.mjs';
 
 const TIMEOUT = envNum('CONTEXT_MEMORY_PREFETCH_TIMEOUT', 1.5);
-const LIMIT = envNum('CONTEXT_MEMORY_PREFETCH_LIMIT', 5);
+// Backend SearchRequest caps limit at 20 (422 otherwise, which would fail the
+// hook open and silently disable prefetch for every prompt). Clamp here.
+const LIMIT = Math.min(20, envNum('CONTEXT_MEMORY_PREFETCH_LIMIT', 5));
 const MAX_OUTPUT_BYTES = envNum('CONTEXT_MEMORY_PREFETCH_MAX_BYTES', 2000);
 
 if (!API_KEY) {
