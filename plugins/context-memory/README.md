@@ -11,6 +11,7 @@ Persistent knowledge base for Claude Code sessions. Automatically retrieves rele
 - **Pre-fetch hook** that searches your context store on every prompt and injects the top hits as additional context for Claude
 - **End-of-turn nudge** (v0.3.0+) that holds the turn open if meaningful work happened (commits, PRs, issue ops, several edits) without a `save_context` call, so learnings actually land in the store instead of getting lost
 - **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered — or explicitly dismissed (v0.4.1+) when a cluster genuinely shouldn't become a Topic
+- **`/bootstrap-memory` command** (v0.10.0+) that seeds an empty knowledge base from your *existing* Claude Code session history: it distills durable knowledge out of this repo's past transcripts into Contexts and Topics, so a new install starts populated instead of blank
 
 Backend service: <https://context-memory.slova.app>
 
@@ -105,6 +106,29 @@ The first auto-call to `save_context` may trigger a permission prompt. To make i
   }
 }
 ```
+
+## How the `/bootstrap-memory` command works
+
+A fresh knowledge base is empty, but your Claude Code history is not. Run
+`/bootstrap-memory` in a repo and it seeds the store from that repo's past
+sessions:
+
+1. A small Node script (`commands/scripts/bootstrap-extract.mjs`, built-ins only —
+   no extra dependencies) reads this repo's local transcripts from
+   `~/.claude/projects/…` and renders each substantive session into a compact,
+   signal-only digest. **Transcripts never leave your machine** — only the
+   distilled, approved knowledge is written.
+2. Claude reads each digest and distills the genuinely durable, non-obvious
+   knowledge (gotchas, decisions, orientation) into candidate Contexts and
+   Topics — the same selectivity as the live `save_context` flow.
+3. Before anything is saved, it **dedups against what's already there** (skip
+   true duplicates; merge related-but-distinct findings into a Topic) and shows
+   you a preview to approve or edit.
+4. Approved atoms are written with `source_type=session-history`, via the same
+   MCP tools the rest of the plugin uses.
+
+It is **idempotent**: each write records the originating session, so a second
+run skips sessions it has already processed and makes no changes.
 
 ## Requirements
 
