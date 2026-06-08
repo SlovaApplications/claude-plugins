@@ -222,7 +222,8 @@ console.log('session-recall.mjs');
       freshCtx.includes('Where you left off (previous session)') &&
       freshCtx.includes('LATEST BODY') &&
       freshCtx.includes('- fact one') &&
-      freshCtx.includes('session_id="FRESH"')
+      freshCtx.includes('session_id="FRESH"') &&
+      freshCtx.includes('project="') // capture instruction carries the cwd (project)
   );
 
   const resume = await runHook('session-recall.mjs', {

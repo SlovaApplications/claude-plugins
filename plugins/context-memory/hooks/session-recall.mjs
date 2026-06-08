@@ -132,7 +132,7 @@ try {
   Use the new id it returns for the next update this session (session_id carries over automatically).`;
   } else if (sessionId) {
     rollingLine = `• ROLLING SESSION STATE — the summary above (if any) is the PREVIOUS session's, for context only; do NOT supersede it. Start THIS session's own rolling summary, scoped to this session, then keep it current by superseding it after each substantive turn:
-  save_context(body="<where things stand>\\n\\n## Open items\\n- …", tags=["session-summary"], git_repo="${repo}", session_id="${sessionId}")
+  save_context(body="<where things stand>\\n\\n## Open items\\n- …", tags=["session-summary"], git_repo="${repo}", project="${cwd}", session_id="${sessionId}")
   Then supersede the id it returns after each update (session_id carries over automatically).`;
   } else if (latestId) {
     rollingLine = `• ROLLING SESSION STATE — keep one summary current so an interrupted session resumes. After each substantive turn, SUPERSEDE it (don't append a new one):
@@ -140,7 +140,7 @@ try {
   Use the new id it returns for the next update this session.`;
   } else {
     rollingLine = `• ROLLING SESSION STATE — no rolling summary exists yet. Create one now, then keep it current by superseding it after each substantive turn:
-  save_context(body="<where things stand>\\n\\n## Open items\\n- …", tags=["session-summary"], git_repo="${repo}")`;
+  save_context(body="<where things stand>\\n\\n## Open items\\n- …", tags=["session-summary"], git_repo="${repo}", project="${cwd}")`;
   }
 
   const instruction = `
@@ -149,8 +149,8 @@ try {
 [context-memory — keep this repo's memory current (git_repo="${repo}"):
 ${rollingLine}
 • When the user states a durable project fact (how it's wired, where things live), capture it once:
-  save_context(body="<the fact>", tags=["orientation"], git_repo="${repo}")
-Pass git_repo="${repo}" exactly as written so recall and capture stay aligned.]`;
+  save_context(body="<the fact>", tags=["orientation"], git_repo="${repo}", project="${cwd}")
+Pass git_repo="${repo}" and project="${cwd}" exactly as written so recall and capture stay aligned.]`;
 
   const additionalContext = surface + instruction;
 

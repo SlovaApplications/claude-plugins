@@ -104,7 +104,9 @@ On approval, for each session:
    `session_id="<the historical sessionId>"`, and its tags. Set `git_repo` to
    that session's repo: the current repo in default mode, or the session's own
    `gitRepo` from `list-all` in `all` mode (omit `git_repo` when `gitRepo` is
-   null — a local-only dir with no remote).
+   null — a local-only dir with no remote). Also set `project="<the session's
+   cwd>"` (each entry's `cwd`) so atoms are attributed to their Claude Code
+   project — this is what makes non-git dirs distinguishable.
    (`source_type` + `session_id` are what make Step 2 idempotent next run.)
 2. For each Topic, `create_topic`, then attach the newly-saved member atoms and
    every `merge_existing_ids` id via `attach_context_to_topic`.
