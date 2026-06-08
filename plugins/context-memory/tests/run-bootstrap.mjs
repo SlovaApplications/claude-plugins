@@ -12,6 +12,7 @@ import {
   cleanUser,
   encodeProjectDir,
   sessionsToProcess,
+  parseGitRemote,
   MAX_TEXT_BLOCK
 } from '../commands/scripts/bootstrap-extract.mjs';
 
@@ -151,6 +152,18 @@ console.log('sessionsToProcess');
   check('dedups repeated ids', JSON.stringify(sessionsToProcess(['a', 'a', 'b'], [])) === JSON.stringify(['a', 'b']));
   check('drops empty ids', sessionsToProcess(['', null, 'a'], []).length === 1);
   check('preserves input order', JSON.stringify(sessionsToProcess(['c', 'a', 'b'], [])) === JSON.stringify(['c', 'a', 'b']));
+}
+
+// ---- parseGitRemote (all-repos repo attribution) ------------------------
+console.log('parseGitRemote');
+{
+  check('ssh remote -> owner/repo', parseGitRemote('git@github.com:SlovaApplications/context-memory.git') === 'SlovaApplications/context-memory');
+  check('https remote -> owner/repo', parseGitRemote('https://github.com/SlovaApplications/context-memory.git') === 'SlovaApplications/context-memory');
+  check('no .git suffix', parseGitRemote('https://github.com/SlovaApplications/context-memory') === 'SlovaApplications/context-memory');
+  check('trailing slash + newline', parseGitRemote('git@github.com:Org/repo.git/\n') === 'Org/repo');
+  check('null -> null', parseGitRemote(null) === null);
+  check('empty -> null', parseGitRemote('') === null);
+  check('non-remote junk -> null', parseGitRemote('not a url') === null);
 }
 
 console.log(`\nsummary: ${pass} passed, ${fail} failed`);

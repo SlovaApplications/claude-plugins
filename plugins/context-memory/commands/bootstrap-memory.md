@@ -4,9 +4,16 @@ description: Seed context-memory from your past Claude Code session history — 
 
 # Bootstrap context-memory from session history
 
-Seed this user's knowledge base by mining their existing Claude Code transcripts
-for the current repo, distilling each substantive session into durable Contexts
-(and Topics where they cohere), and saving them via the context-memory MCP tools.
+Seed this user's knowledge base by mining their existing Claude Code transcripts,
+distilling each substantive session into durable Contexts (and Topics where they
+cohere), and saving them via the context-memory MCP tools.
+
+**Scope** — depends on the argument (`$ARGUMENTS`):
+- _no argument_ → just the **current repo**.
+- `all` → **every project** under `~/.claude/projects` (across all repos). Each
+  session carries its own `gitRepo`, so atoms stay attributed/filterable per
+  repo. Note `all` will also surface non-dev or local-only directories; lean
+  even harder on the dedup + preview gate there.
 
 Transcripts never leave the machine: you read them locally and only the
 distilled, user-approved knowledge is written. Be conservative — a sparse,
@@ -14,14 +21,21 @@ high-signal KB is the goal; a polluted one is worse than an empty one.
 
 ## Step 1 — Enumerate substantive sessions (deterministic)
 
-Run the extractor to list this repo's sessions:
+Current repo (default):
 
 ```
 !node "${CLAUDE_PLUGIN_ROOT}/commands/scripts/bootstrap-extract.mjs" list "$(pwd)"
 ```
 
-Each entry has `{file, sessionId, title, substantive}`. Ignore non-substantive
-sessions (trivial/command-only).
+All repos (when the argument is `all`):
+
+```
+!node "${CLAUDE_PLUGIN_ROOT}/commands/scripts/bootstrap-extract.mjs" list-all
+```
+
+Each entry has `{file, sessionId, title, substantive, cwd, gitRepo}`. Ignore
+non-substantive sessions (trivial/command-only). In `all` mode, consider
+grouping by `gitRepo` and confirming scope with the user before distilling.
 
 ## Step 2 — Idempotency gate (skip already-bootstrapped sessions)
 
@@ -87,7 +101,12 @@ they approve.**
 
 On approval, for each session:
 1. `save_context` each kept atom with `source_type="session-history"`,
-   `session_id="<the historical sessionId>"`, `git_repo="<repo>"`, and its tags.
+   `session_id="<the historical sessionId>"`, and its tags. Set `git_repo` to
+   that session's repo: the current repo in default mode, or the session's own
+   `gitRepo` from `list-all` in `all` mode (omit `git_repo` when `gitRepo` is
+   null — a local-only dir with no remote). Also set `project="<the session's
+   cwd>"` (each entry's `cwd`) so atoms are attributed to their Claude Code
+   project — this is what makes non-git dirs distinguishable.
    (`source_type` + `session_id` are what make Step 2 idempotent next run.)
 2. For each Topic, `create_topic`, then attach the newly-saved member atoms and
    every `merge_existing_ids` id via `attach_context_to_topic`.
