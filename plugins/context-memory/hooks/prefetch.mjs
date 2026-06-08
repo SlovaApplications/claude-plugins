@@ -7,6 +7,7 @@
 // All other failures (network error, malformed response) still fail open: the
 // script prints nothing and exits 0 so the prompt passes through.
 
+import { execFileSync } from 'node:child_process';
 import {
   API_KEY,
   API_URL,
@@ -19,6 +20,27 @@ import {
   clipBytes,
   clipChars
 } from './lib.mjs';
+
+// Canonical repo id = owner/repo from the origin remote (stable across
+// https/ssh forms) — the same derivation session-recall.mjs uses, so the
+// `git_repo` we boost on matches what capture writes. Best-effort: any
+// failure (no git, no remote, detached dir) yields '' and locality simply
+// isn't applied. Never throws — prefetch must stay fail-open.
+function originRepo(cwd) {
+  try {
+    const remote = execFileSync('git', ['-C', cwd, 'remote', 'get-url', 'origin'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    if (!remote) return '';
+    return remote
+      .replace(/^git@[^:]+:/, '')
+      .replace(/^[a-z]+:\/\/[^/]+\//, '')
+      .replace(/\.git$/, '');
+  } catch {
+    return '';
+  }
+}
 
 const TIMEOUT = envNum('CONTEXT_MEMORY_PREFETCH_TIMEOUT', 1.5);
 // Backend SearchRequest caps limit at 20 (422 otherwise, which would fail the
@@ -83,9 +105,19 @@ try {
   // Cap query length so we don't ship a 10KB prompt as a search query.
   const query = clipBytes(prompt, 500);
 
+  // Locality hints: the session's cwd (project) and origin repo. The backend
+  // treats these as a soft boost, not a filter, so the current project's
+  // context ranks above cross-project hits without dropping cross-cutting
+  // ones. cwd matches what capture writes as `project`. Older backends ignore
+  // unknown body fields, so sending these is safe even pre-upgrade.
+  const cwd = input?.cwd || process.cwd();
+  const gitRepo = originRepo(cwd);
+  const searchBody = { query, limit: LIMIT, project: cwd };
+  if (gitRepo) searchBody.git_repo = gitRepo;
+
   const res = await apiRequest('/api/v1/contexts/search', {
     method: 'POST',
-    body: { query, limit: LIMIT },
+    body: searchBody,
     timeoutSec: TIMEOUT
   });
   if (!res) process.exit(0);

@@ -159,6 +159,30 @@ console.log('prefetch.mjs');
     ]);
   const nudge = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: 'q' }), env: KEY });
   check('two Contexts + no Topic → synthesis nudge', nudge.out.includes('consider calling create_topic'));
+
+  // Locality: the search body carries the session cwd as `project` and the
+  // origin repo as `git_repo` so the backend can boost same-project hits.
+  let captured = null;
+  mock = (req, res) => {
+    try {
+      captured = JSON.parse(req.body);
+    } catch {
+      captured = null;
+    }
+    json(res, [{ type: 'context', body: '# A\n1', tags: [] }]);
+  };
+  const loc = await runHook('prefetch.mjs', {
+    payload: JSON.stringify({ prompt: 'q', cwd: TESTS_DIR }),
+    env: KEY
+  });
+  check(
+    'search request carries project (cwd) + git_repo (locality)',
+    loc.code === 0 &&
+      captured &&
+      captured.project === TESTS_DIR &&
+      typeof captured.git_repo === 'string' &&
+      captured.git_repo.length > 0
+  );
 }
 
 // ---- topic-stop ---------------------------------------------------------
@@ -242,6 +266,35 @@ console.log('session-recall.mjs');
     resumeCtx.includes('## Resuming this session') &&
       resumeCtx.includes('OWN BODY') &&
       resumeCtx.includes('context_id="own-1"')
+  );
+
+  // Backend down (the session-summary probe 500s) must NOT render as the false
+  // "No prior session recorded" — that's the bug where a timeout looked like an
+  // empty repo and steered the agent to fork a duplicate summary.
+  mock = (req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const tag = url.searchParams.get('tag');
+    if (tag === 'session-summary') return json(res, { detail: 'boom' }, 500);
+    if (tag === 'orientation') return json(res, { items: [{ body: 'fact one' }] });
+    return json(res, { items: [] });
+  };
+  const down = await runHook('session-recall.mjs', {
+    payload: JSON.stringify({ cwd: TESTS_DIR, session_id: 'DOWN' }),
+    env: KEY
+  });
+  const downCtx = (() => {
+    try {
+      return JSON.parse(down.out).hookSpecificOutput.additionalContext;
+    } catch {
+      return '';
+    }
+  })();
+  check(
+    'recall unreachable → honest message + look-before-create (not false "no prior session")',
+    downCtx.includes('unreachable at session start') &&
+      !downCtx.includes('No prior session recorded') &&
+      downCtx.includes('recall was unavailable') &&
+      downCtx.includes('list_contexts(git_repo=')
   );
 }
 
