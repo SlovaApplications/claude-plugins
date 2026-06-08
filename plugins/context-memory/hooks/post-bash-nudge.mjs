@@ -27,7 +27,7 @@ try {
       hookSpecificOutput: {
         hookEventName: 'PostToolUse',
         additionalContext:
-          "context-memory nudge: meaningful work just happened. If something novel was learned (a non-obvious decision, a gotcha, a why-it-matters), call mcp__context-memory__save_context now while it's fresh. Skip if it's pure bookkeeping."
+          "context-memory nudge: meaningful work just happened. If something novel was learned (a non-obvious decision, a gotcha, a why-it-matters), call save_context now while it's fresh. Skip if it's pure bookkeeping."
       }
     });
   }
