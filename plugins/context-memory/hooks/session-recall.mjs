@@ -100,6 +100,14 @@ try {
   const ownBody = own?.items?.[0]?.body || '';
   const latestBody = latest?.items?.[0]?.body || '';
   const latestId = latest?.items?.[0]?.id || '';
+  // Distinguish "no prior session exists" from "couldn't reach memory".
+  // fetchContexts returns null on any transport error / non-2xx and the parsed
+  // body (possibly with an empty items[]) on success — so a null `latest` means
+  // the authoritative repo-wide probe failed, NOT that the repo is new. Without
+  // this, a timeout (2s budget, cold backend) renders as the false and
+  // demoralizing "No prior session recorded", and — worse — steers the agent to
+  // create a brand-new summary, fragmenting one that already exists.
+  const recallUnavailable = latest === null;
   const orientationItems = Array.isArray(orientation?.items) ? orientation.items : [];
   const orientationBodies = orientationItems
     .map((i) => '- ' + String(i?.body || '').replace(/\n/g, ' '))
@@ -113,6 +121,8 @@ try {
     surface += `## Resuming this session\n${ownBody}\n\n`;
   } else if (latestBody) {
     surface += `## Where you left off (previous session)\n${latestBody}\n\n`;
+  } else if (recallUnavailable) {
+    surface += `## Where you left off\ncontext-memory was unreachable at session start, so prior session state could not be loaded — it may well exist. Don't assume this repo is new; if you need it, retry once you're working.\n\n`;
   } else {
     surface += `## Where you left off\nNo prior session recorded for this repo yet.\n\n`;
   }
@@ -130,6 +140,13 @@ try {
     rollingLine = `• ROLLING SESSION STATE — you are resuming this session (${sessionId}). Keep its summary current by superseding it after each substantive turn (don't start a new one):
   supersede_context(context_id="${ownId}", body="<where things stand>\\n\\n## Open items\\n- …", tags=["session-summary"], git_repo="${repo}")
   Use the new id it returns for the next update this session (session_id carries over automatically).`;
+  } else if (recallUnavailable) {
+    // The probe failed, so ownId/latestId are unknown, not absent. Tell the
+    // agent to look before creating, so a transient outage can't fork the
+    // rolling summary into a duplicate.
+    rollingLine = `• ROLLING SESSION STATE — recall was unavailable at session start, so it's unknown whether a rolling summary already exists for git_repo="${repo}"${sessionId ? ` (session ${sessionId})` : ''}. Before creating one, look: list_contexts(git_repo="${repo}", tag="session-summary"${sessionId ? `, session_id="${sessionId}"` : ''}). If one comes back, SUPERSEDE it; only if none does, create it:
+  save_context(body="<where things stand>\\n\\n## Open items\\n- …", tags=["session-summary"], git_repo="${repo}", project="${cwd}"${sessionId ? `, session_id="${sessionId}"` : ''})
+  Then supersede the id it returns after each update.`;
   } else if (sessionId) {
     rollingLine = `• ROLLING SESSION STATE — the summary above (if any) is the PREVIOUS session's, for context only; do NOT supersede it. Start THIS session's own rolling summary, scoped to this session, then keep it current by superseding it after each substantive turn:
   save_context(body="<where things stand>\\n\\n## Open items\\n- …", tags=["session-summary"], git_repo="${repo}", project="${cwd}", session_id="${sessionId}")
