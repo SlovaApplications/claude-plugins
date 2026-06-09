@@ -138,7 +138,8 @@ non-dev and local-only directories.
 
 ## Requirements
 
-- Claude Code (latest). The hooks are Node scripts that run on the Node.js bundled with Claude Code — there are no other dependencies to install, on **macOS, Linux, or Windows**.
+- Claude Code (latest), on **macOS, Linux, or Windows**.
+- **Node.js 18 or newer**, available as `node` on your `PATH`. The plugin's hooks are Node scripts. Claude Code's installer may bundle its own Node without exposing a `node` command, so if `node --version` doesn't print a version, install Node yourself (for example `brew install node`, your distro's package manager, or [nodejs.org](https://nodejs.org)). If `node` can't be found, the hooks can't run and Claude Code reports a hook error each turn.
 - `git` is used only for the per-repo session recall; outside a git repo that hook simply no-ops.
 
 ## License
