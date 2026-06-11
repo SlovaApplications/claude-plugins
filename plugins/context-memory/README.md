@@ -27,14 +27,27 @@ Backend service: <https://context-memory.slova.app>
 
    Reload your shell, or open a new terminal, before launching Claude Code.
 
-3. **Add the marketplace and install the plugin** in Claude Code:
+3. **Add the marketplace** in Claude Code:
 
    ```
    /plugin marketplace add SlovaApplications/claude-plugins
+   ```
+
+4. **Install the plugin**:
+
+   ```
    /plugin install context-memory@slova
    ```
 
-4. **Restart Claude Code**. The MCP tools should appear and the pre-fetch hook will fire on every prompt.
+   When the install prompt asks who to install for, choose **Install for you (user scope)**.
+
+5. **Activate it.** `/reload-plugins` loads the plugin's MCP server and hooks into your current session, no restart needed:
+
+   ```
+   /reload-plugins
+   ```
+
+   The MCP tools should appear and the pre-fetch hook will fire on every prompt.
 
 ## Configuration
 
