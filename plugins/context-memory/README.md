@@ -17,7 +17,7 @@ Backend service: <https://context-memory.slova.app>
 
 ## Install
 
-1. **Request an API key.** context-memory is in invite-only beta — request access at <https://context-memory.slova.app> and we'll email you when your key is ready. (Or reach us directly at <support@slova.app>.)
+1. **Get an API key.** context-memory is in invite-only beta — request access at <https://context-memory.slova.app> and we'll email you a personal invite link. Opening it registers your account and shows your `cm_…` key exactly once; the full walkthrough lives at [Get started](https://context-memory.slova.app/get-started/). Lost a key later? Log in at your [account page](https://context-memory.slova.app/account/) and rotate it. (Questions: <hello@slova.app>.)
 
 2. **Export the key** in your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
 

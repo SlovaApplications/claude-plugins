@@ -20,7 +20,7 @@ Persistent knowledge base for Claude Code sessions. Pre-fetches relevant context
 /plugin install context-memory@slova
 ```
 
-**Requires an API key.** The plugin talks to the context-memory backend, which is in invite-only beta — request access at <https://context-memory.slova.app>, then export the key you receive as `CONTEXT_MEMORY_API_KEY` before launching Claude Code.
+**Requires an API key.** The plugin talks to the context-memory backend, which is in invite-only beta — request access at <https://context-memory.slova.app> and you'll receive a personal invite link by email. The link registers your account and shows your API key (once); export it as `CONTEXT_MEMORY_API_KEY` before launching Claude Code. Keys can be rotated any time from your [account page](https://context-memory.slova.app/account/).
 
 See [`plugins/context-memory/README.md`](plugins/context-memory/README.md) for setup, configuration, and how the prefetch hook works.
 
