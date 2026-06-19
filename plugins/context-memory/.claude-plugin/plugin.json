@@ -1,6 +1,6 @@
 {
   "name": "context-memory",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Persistent knowledge base for Claude Code — automatic context retrieval on every prompt",
   "author": {
     "name": "Slova Applications",
@@ -13,7 +13,7 @@
   "mcpServers": {
     "context-memory": {
       "type": "http",
-      "url": "${CONTEXT_MEMORY_API_URL:-https://api.context-memory.slova.app}/mcp/",
+      "url": "${CONTEXT_MEMORY_API_URL:-https://cm-api.slova.app}/mcp/",
       "headers": {
         "Authorization": "Bearer ${CONTEXT_MEMORY_API_KEY}"
       },
