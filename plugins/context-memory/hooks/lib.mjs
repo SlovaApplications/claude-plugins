@@ -9,7 +9,7 @@
 import process from 'node:process';
 
 export const API_KEY = process.env.CONTEXT_MEMORY_API_KEY || '';
-export const API_URL = process.env.CONTEXT_MEMORY_API_URL || 'https://api.context-memory.slova.app';
+export const API_URL = process.env.CONTEXT_MEMORY_API_URL || 'https://cm-api.slova.app';
 
 // Numeric env var with a default; non-numeric or unset falls back.
 export function envNum(name, fallback) {

@@ -15,7 +15,7 @@ We aim to acknowledge reports within **3 business days** and to ship a fix or mi
 
 ## Scope
 
-This repository ships client-side code that runs locally in your shell on every Claude Code prompt and connects to the context-memory backend at `https://api.context-memory.slova.app` (or your configured override). In scope:
+This repository ships client-side code that runs locally in your shell on every Claude Code prompt and connects to the context-memory backend at `https://cm-api.slova.app` (or your configured override). In scope:
 
 - The pre-fetch hook (`plugins/context-memory/hooks/prefetch.sh`)
 - The plugin manifest and marketplace manifest
