@@ -17,7 +17,7 @@ Backend service: <https://context-memory.slova.app>
 
 ## Install
 
-1. **Get an API key.** Sign up free at <https://context-memory.slova.app/signup/> — with email and a password (confirm via the link we email you), or one click with **Continue with GitHub**. Either way you land on your account with your `cm_…` key shown exactly once; the full walkthrough lives at [Get started](https://context-memory.slova.app/get-started/). Lost a key later? Log in at your [account page](https://context-memory.slova.app/account/) and rotate it. (Questions: <hello@slova.app>.)
+1. **Get an API key.** Sign up free at <https://context-memory.slova.app/signup/> — with email and a password (confirm via the link we email you), or one click with **Sign up with GitHub**. Either way you land on your account with your `cm_…` key shown exactly once; the full walkthrough lives at [Get started](https://context-memory.slova.app/get-started/). Lost a key later? Log in at your [account page](https://context-memory.slova.app/account/) and rotate it. (Questions: <hello@slova.app>.)
 
 2. **Export the key** in your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
 
