@@ -69,10 +69,10 @@ All configuration is via environment variables (read at MCP-server-start time an
 
 The plugin is a client for a **hosted** backend, so some data leaves your machine. Specifically:
 
-- **Prompt text**: on every prompt, the pre-fetch hook sends the first **500 characters** of your prompt to the search API to find relevant memories. Nothing else from the prompt is sent.
+- **Prompt text**: on every prompt, the pre-fetch hook sends the first **500 bytes** (about 500 characters of English text) of your prompt to the search API to find relevant memories. Nothing else from the prompt is sent.
 - **Memories you save**: Contexts and Topics you (or Claude) save — their bodies, tags, and the `git_repo`/`project` labels used for scoping — are stored on the backend under your account.
 - **What stays local**: your Claude Code transcripts never leave your machine. `/bootstrap-memory` reads them locally and uploads only the distilled memories you approve.
-- **Transport**: all requests use HTTPS; the hooks refuse to send your API key over any non-HTTPS URL (except `http://localhost`).
+- **Transport**: all requests use HTTPS; the hooks refuse to send your API key over any non-HTTPS URL (except `http://localhost` or `http://127.0.0.1`).
 - **Your control**: rotate your key any time from your [account page](https://context-memory.slova.app/account/); delete stored memories with the `delete_context` / `bulk_delete_contexts` tools.
 
 Questions about data handling: <support@slova.app>.
