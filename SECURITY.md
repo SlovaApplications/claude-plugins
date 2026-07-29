@@ -15,7 +15,7 @@ We aim to acknowledge reports within **3 business days** and to ship a fix or mi
 
 ## Scope
 
-This repository ships client-side code that runs locally in your shell on every Claude Code prompt and connects to the context-memory backend at `https://cm-api.slova.app` (or your configured override). In scope:
+This repository ships client-side code that runs locally in your shell on every Claude Code prompt and connects to the local context-memory engine at `http://127.0.0.1:41414` by default (or your configured override, e.g. the legacy hosted backend). In scope:
 
 - The plugin hooks under `plugins/context-memory/hooks/` — `prefetch.mjs`, `session-recall.mjs`, `stop-nudge.mjs`, `topic-stop.mjs`, `post-bash-nudge.mjs`, and the shared `lib.mjs` (Node scripts that run locally on your machine and call the backend)
 - The `/bootstrap-memory` command script (`plugins/context-memory/commands/scripts/bootstrap-extract.mjs`), which reads local transcripts

@@ -134,7 +134,7 @@ console.log('prefetch.mjs');
   check('non-https URL → exit 2', badUrl.code === 2 && badUrl.err.includes('non-HTTPS'));
 
   mock = (req, res) => json(res, { detail: 'no' }, 401);
-  const authFail = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: 'hi' }), env: KEY });
+  const authFail = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: 'help me debug this auth issue' }), env: KEY });
   check('401 → exit 2 + auth guidance', authFail.code === 2 && authFail.err.includes('authentication failed'));
 
   mock = (req, res) =>
@@ -142,7 +142,7 @@ console.log('prefetch.mjs');
       { type: 'topic', title: 'My Topic', overview: 'Overview', load_bearing_tier: 'proven', tags: ['x'] },
       { type: 'context', body: '# Heading\nbody', tags: ['z'] }
     ]);
-  const happy = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: 'q' }), env: KEY });
+  const happy = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: 'how do I fix the flaky test' }), env: KEY });
   check(
     'happy path renders header + Topic + Context',
     happy.code === 0 &&
@@ -157,7 +157,7 @@ console.log('prefetch.mjs');
       { type: 'context', body: '# A\n1', tags: [] },
       { type: 'context', body: '# B\n2', tags: [] }
     ]);
-  const nudge = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: 'q' }), env: KEY });
+  const nudge = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: 'how do I fix the flaky test' }), env: KEY });
   check('two Contexts + no Topic → synthesis nudge', nudge.out.includes('consider calling create_topic'));
 
   // Locality: the search body carries the session cwd as `project` and the
@@ -172,7 +172,7 @@ console.log('prefetch.mjs');
     json(res, [{ type: 'context', body: '# A\n1', tags: [] }]);
   };
   const loc = await runHook('prefetch.mjs', {
-    payload: JSON.stringify({ prompt: 'q', cwd: TESTS_DIR }),
+    payload: JSON.stringify({ prompt: 'where does the config live', cwd: TESTS_DIR }),
     env: KEY
   });
   check(
@@ -183,6 +183,21 @@ console.log('prefetch.mjs');
       typeof captured.git_repo === 'string' &&
       captured.git_repo.length > 0
   );
+
+  // v0.14 non-prompt gating: notifications, command scaffolding, and trivially
+  // short prompts carry no retrieval intent — recall must not fire.
+  mock = (req, res) => json(res, [{ type: 'context', body: '# A\n1', tags: [] }]);
+  const gatedInputs = [
+    ['task-notification', '<task-notification>\n<task-id>x</task-id>\n</task-notification>'],
+    ['system-notification', '[SYSTEM NOTIFICATION - NOT USER INPUT]\nautomated event'],
+    ['slash-command scaffolding', '<command-name>/model</command-name>'],
+    ['bash-input passthrough', '<bash-input>ls -la</bash-input>'],
+    ['short prompt', 'retry']
+  ];
+  for (const [label, gatedPrompt] of gatedInputs) {
+    const gated = await runHook('prefetch.mjs', { payload: JSON.stringify({ prompt: gatedPrompt }), env: KEY });
+    check(`non-prompt gated: ${label}`, gated.code === 0 && gated.out === '');
+  }
 }
 
 // ---- topic-stop ---------------------------------------------------------

@@ -9,7 +9,10 @@
 import process from 'node:process';
 
 export const API_KEY = process.env.CONTEXT_MEMORY_API_KEY || '';
-export const API_URL = process.env.CONTEXT_MEMORY_API_URL || 'https://cm-api.slova.app';
+// v0.14: the plugin talks to the LOCAL context-memory engine by default
+// (the Mac app / `cm-bench serve`). Must stay in lockstep with the MCP
+// server URL default in .claude-plugin/plugin.json.
+export const API_URL = process.env.CONTEXT_MEMORY_API_URL || 'http://127.0.0.1:41414';
 
 // Numeric env var with a default; non-numeric or unset falls back.
 export function envNum(name, fallback) {

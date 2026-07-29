@@ -13,11 +13,11 @@ Persistent knowledge base for Claude Code sessions. Automatically retrieves rele
 - **Topic-synthesis enforcement** (v0.4.0+) that blocks turn-end while tags have accumulated enough Contexts to warrant a Topic but none covers them, so clusters of knowledge get compiled into durable Topics instead of staying scattered — or explicitly dismissed (v0.4.1+) when a cluster genuinely shouldn't become a Topic
 - **`/bootstrap-memory` command** (v0.10.0+) that seeds an empty knowledge base from your *existing* Claude Code session history: it distills durable knowledge out of past transcripts into Contexts and Topics, so a new install starts populated instead of blank — the current repo by default, or every project with `/bootstrap-memory all` (v0.11.0+)
 
-Backend service: <https://context-memory.slova.app>
+Engine: the **local context-memory app** (or `cm-bench serve` headless) — your memories live on your machine. Legacy hosted backend: <https://context-memory.slova.app> (sunsetting; set `CONTEXT_MEMORY_API_URL` to keep using it).
 
 ## Install
 
-1. **Get an API key.** Sign up free at <https://context-memory.slova.app/signup/> — with email and a password (confirm via the link we email you), or one click with **Sign up with GitHub**. Either way you land on your account with your `cm_…` key shown exactly once; the full walkthrough lives at [Get started](https://context-memory.slova.app/get-started/). Lost a key later? Log in at your [account page](https://context-memory.slova.app/account/) and rotate it. (Questions: <hello@slova.app>.)
+1. **Get an API token.** Launch the context-memory app and copy its API token (running headless, `cm-bench serve <db>` prints it on startup). Set it as `CONTEXT_MEMORY_API_KEY` in your shell. (Questions: <hello@slova.app>.)
 
 2. **Export the key** in your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
 
@@ -56,7 +56,7 @@ All configuration is via environment variables (read at MCP-server-start time an
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CONTEXT_MEMORY_API_KEY` | _(required)_ | Bearer token from your dashboard. If unset, the prefetch hook exits with setup guidance; the other hooks stay silent and the MCP server fails to load. |
-| `CONTEXT_MEMORY_API_URL` | `https://cm-api.slova.app` | Override to point at a staging or local development backend. Must be `https://` (or `http://localhost` / `http://127.0.0.1` for local development) — the hooks refuse to send the API key over any other cleartext URL. |
+| `CONTEXT_MEMORY_API_URL` | `http://127.0.0.1:41414` | Override to point at a staging or local development backend. Must be `https://` (or `http://localhost` / `http://127.0.0.1` for local development) — the hooks refuse to send the API key over any other cleartext URL. |
 | `CONTEXT_MEMORY_PREFETCH_TIMEOUT` | `1.5` | Seconds to wait for the search API before giving up. |
 | `CONTEXT_MEMORY_PREFETCH_LIMIT` | `5` | Max contexts injected per prompt. |
 | `CONTEXT_MEMORY_PREFETCH_MAX_BYTES` | `2000` | Hard cap on injected text size. |
@@ -73,7 +73,7 @@ The plugin is a client for a **hosted** backend, so some data leaves your machin
 - **Memories you save**: Contexts and Topics you (or Claude) save — their bodies, tags, and the `git_repo`/`project` labels used for scoping — are stored on the backend under your account.
 - **What stays local**: your Claude Code transcripts never leave your machine. `/bootstrap-memory` reads them locally and uploads only the distilled memories you approve.
 - **Transport**: all requests use HTTPS; the hooks refuse to send your API key over any non-HTTPS URL (except `http://localhost` or `http://127.0.0.1`).
-- **Your control**: rotate your key any time from your [account page](https://context-memory.slova.app/account/); delete stored memories with the `delete_context` / `bulk_delete_contexts` tools.
+- **Your control**: everything lives in a local SQLite database on your machine; delete stored memories with the `delete_context` / `bulk_delete_contexts` tools, or delete the database file itself.
 
 Questions about data handling: <support@slova.app>.
 
