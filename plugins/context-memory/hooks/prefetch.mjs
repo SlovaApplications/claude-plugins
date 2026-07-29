@@ -51,27 +51,22 @@ const MAX_OUTPUT_BYTES = envNum('CONTEXT_MEMORY_PREFETCH_MAX_BYTES', 2000);
 if (!API_KEY) {
   process.stderr.write(`context-memory: CONTEXT_MEMORY_API_KEY is not set.
 
-Fix this by either:
+The plugin talks to your local context-memory engine (default
+${API_URL}). Fix this by either:
 
-  1. Setting an API key (get one at https://context-memory.slova.app).
+  1. Launching the context-memory app and copying its API token, then:
 
      macOS / Linux (bash, zsh):
 
-       export CONTEXT_MEMORY_API_KEY=cm_...
+       export CONTEXT_MEMORY_API_KEY=cm_local_...
 
      Add the line to ~/.zshrc or ~/.bashrc to persist across sessions.
+     (Running the engine headless? \`cm-bench serve <db>\` prints the
+     token on startup.)
 
      Windows (PowerShell), persistent for the current user:
 
-       [Environment]::SetEnvironmentVariable("CONTEXT_MEMORY_API_KEY", "cm_...", "User")
-
-     Or session-only:
-
-       $env:CONTEXT_MEMORY_API_KEY = "cm_..."
-
-     Windows (cmd.exe), persistent — takes effect in NEW shells only:
-
-       setx CONTEXT_MEMORY_API_KEY cm_...
+       [Environment]::SetEnvironmentVariable("CONTEXT_MEMORY_API_KEY", "cm_local_...", "User")
 
   2. Disabling the plugin:
 
@@ -102,6 +97,21 @@ try {
   const prompt = input?.prompt || '';
   if (!prompt) process.exit(0);
 
+  // Skip non-prompt turns (v0.14, noise fix): task notifications, command
+  // scaffolding, and trivially short prompts carry no retrieval intent —
+  // firing recall on them was measured as a top source of injected noise.
+  const NON_PROMPT = [
+    /^\s*<task-notification>/,
+    /^\s*\[SYSTEM NOTIFICATION/,
+    /^\s*<local-command-caveat>/,
+    /^\s*<command-name>/,
+    /^\s*<bash-input>/,
+    /^\s*\[Request interrupted/
+  ];
+  if (prompt.trim().length < 12 || NON_PROMPT.some((re) => re.test(prompt))) {
+    process.exit(0);
+  }
+
   // Cap query length so we don't ship a 10KB prompt as a search query.
   const query = clipBytes(prompt, 500);
 
@@ -128,14 +138,16 @@ try {
   if (res.status === 401 || res.status === 403) {
     process.stderr.write(`context-memory: authentication failed (HTTP ${res.status}).
 
-Your CONTEXT_MEMORY_API_KEY is set but the server rejected it. The key
-is most likely expired, revoked, or malformed.
+Your CONTEXT_MEMORY_API_KEY is set but doesn't match the local
+engine's token (the token lives in the engine's database and changes
+if the database is recreated).
 
 Fix this by either:
 
-  1. Issuing a new API key at https://context-memory.slova.app and
-     replacing the value in your shell config (see the missing-key
-     error message for per-OS instructions).
+  1. Copying the current token from the context-memory app and
+     replacing the value in your shell config. Headless engine:
+
+       sqlite3 <db> "SELECT value FROM app_meta WHERE key='local_token'"
 
   2. Disabling the plugin:
 

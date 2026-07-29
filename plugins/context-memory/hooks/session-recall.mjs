@@ -122,7 +122,7 @@ try {
   } else if (latestBody) {
     surface += `## Where you left off (previous session)\n${latestBody}\n\n`;
   } else if (recallUnavailable) {
-    surface += `## Where you left off\ncontext-memory was unreachable at session start, so prior session state could not be loaded — it may well exist. Don't assume this repo is new; if you need it, retry once you're working.\n\n`;
+    surface += `## Where you left off\nThe local context-memory engine was unreachable at session start (is the context-memory app running?), so prior session state could not be loaded — it may well exist. Don't assume this repo is new; if you need it, retry once you're working.\n\n`;
   } else {
     surface += `## Where you left off\nNo prior session recorded for this repo yet.\n\n`;
   }
