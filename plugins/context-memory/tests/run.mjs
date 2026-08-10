@@ -48,7 +48,17 @@ const json = (res, obj, status = 200) => {
 
 function runHook(file, { payload = '', env = {}, cwd } = {}) {
   return new Promise((resolve) => {
-    const childEnv = { ...process.env, ...env };
+    // Hermetic by default: without this, v0.15 file discovery would find the
+    // developer's REAL credentials.json and the "no key" tests would hit the
+    // live engine. Point discovery at a nonexistent file unless a test opts in.
+    const childEnv = {
+      ...process.env,
+      CONTEXT_MEMORY_CREDENTIALS: join(tmpdir(), 'cm-tests-no-such-credentials.json'),
+      ...env
+    };
+    delete childEnv.CONTEXT_MEMORY_API_KEY;
+    delete childEnv.CONTEXT_MEMORY_API_URL;
+    Object.assign(childEnv, env);
     for (const k of Object.keys(childEnv)) if (childEnv[k] === undefined) delete childEnv[k];
     const ps = spawn(process.execPath, [join(HOOKS, file)], { env: childEnv, cwd });
     let out = '';
@@ -310,6 +320,99 @@ console.log('session-recall.mjs');
       !downCtx.includes('No prior session recorded') &&
       downCtx.includes('recall was unavailable') &&
       downCtx.includes('list_contexts(git_repo=')
+  );
+}
+
+// ---- v0.15 zero-setup pairing: credentials discovery + MCP bridge -------
+console.log('credentials discovery + mcp/bridge.mjs');
+{
+  const { writeFileSync } = await import('node:fs');
+  const credsDir = mkdtempSync(join(tmpdir(), 'cm-creds-'));
+  const credsPath = join(credsDir, 'credentials.json');
+  writeFileSync(credsPath, JSON.stringify({ url: MOCK_URL, token: 'cm_local_filetoken' }));
+  const CREDS = { CONTEXT_MEMORY_CREDENTIALS: credsPath };
+
+  // Hooks discover the token from the file — no env vars at all.
+  mock = (req, res) => {
+    req.auth = req.headers.authorization;
+    if (req.auth !== 'Bearer cm_local_filetoken') return json(res, {}, 401);
+    return json(res, { items: [] });
+  };
+  const recall = await runHook('session-recall.mjs', {
+    payload: JSON.stringify({ cwd: TESTS_DIR, session_id: 'FILECREDS' }),
+    env: CREDS
+  });
+  check(
+    'hooks authenticate via discovered credentials file (no env vars)',
+    recall.code === 0 && !recall.out.includes('unreachable at session start')
+  );
+
+  // Env var still wins as an explicit override.
+  mock = (req, res) => json(res, { override: req.headers.authorization }, 200);
+  const overridden = await runHook('session-recall.mjs', {
+    payload: JSON.stringify({ cwd: TESTS_DIR, session_id: 'OVERRIDE' }),
+    env: { ...CREDS, CONTEXT_MEMORY_API_KEY: 'cm_env_wins', CONTEXT_MEMORY_API_URL: MOCK_URL }
+  });
+  check('env vars override the credentials file', overridden.code === 0);
+
+  // The stdio bridge: JSON-RPC request in → engine response out.
+  function runBridge(lines, env) {
+    return new Promise((resolve) => {
+      // Same hermeticity rule as runHook: the developer's real env vars must
+      // not leak into the bridge under test.
+      const bridgeEnv = { ...process.env, CONTEXT_MEMORY_CREDENTIALS: '/nonexistent' };
+      delete bridgeEnv.CONTEXT_MEMORY_API_KEY;
+      delete bridgeEnv.CONTEXT_MEMORY_API_URL;
+      Object.assign(bridgeEnv, env);
+      const ps = spawn(process.execPath, [join(TESTS_DIR, '..', 'mcp', 'bridge.mjs')], {
+        env: bridgeEnv
+      });
+      let out = '';
+      ps.stdout.on('data', (d) => (out += d));
+      const timer = setTimeout(() => ps.kill(), 4000);
+      ps.on('close', () => {
+        clearTimeout(timer);
+        resolve(out.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)));
+      });
+      ps.stdin.write(lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+      ps.stdin.end();
+    });
+  }
+
+  mock = (req, res) => {
+    if (req.headers.authorization !== 'Bearer cm_local_filetoken') return json(res, {}, 401);
+    const rpc = JSON.parse(req.body);
+    if (rpc.id === undefined) return json(res, {}, 202); // notification ack
+    return json(res, { jsonrpc: '2.0', id: rpc.id, result: { ok: true, echo: rpc.method } });
+  };
+  const replies = await runBridge(
+    [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' }
+    ],
+    CREDS
+  );
+  check(
+    'bridge proxies requests with file-discovered auth; notifications produce no output',
+    replies.length === 2 &&
+      replies.some((r) => r.id === 1 && r.result?.echo === 'initialize') &&
+      replies.some((r) => r.id === 2 && r.result?.echo === 'tools/list')
+  );
+
+  const noCreds = await runBridge([{ jsonrpc: '2.0', id: 7, method: 'initialize' }], {});
+  check(
+    'bridge without credentials returns a pairing error, not a hang',
+    noCreds.length === 1 && noCreds[0].id === 7 && /launch the context-memory app/.test(noCreds[0].error?.message ?? '')
+  );
+
+  const engineDown = await runBridge([{ jsonrpc: '2.0', id: 9, method: 'initialize' }], {
+    CONTEXT_MEMORY_API_KEY: 'cm_x',
+    CONTEXT_MEMORY_API_URL: 'http://127.0.0.1:1'
+  });
+  check(
+    'bridge with engine down returns an actionable JSON-RPC error',
+    engineDown.length === 1 && /is the context-memory app running/.test(engineDown[0].error?.message ?? '')
   );
 }
 

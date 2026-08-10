@@ -7,12 +7,51 @@
 // makes it emit nothing rather than disrupt the session.
 
 import process from 'node:process';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
-export const API_KEY = process.env.CONTEXT_MEMORY_API_KEY || '';
-// v0.14: the plugin talks to the LOCAL context-memory engine by default
-// (the Mac app / `cm-bench serve`). Must stay in lockstep with the MCP
-// server URL default in .claude-plugin/plugin.json.
-export const API_URL = process.env.CONTEXT_MEMORY_API_URL || 'http://127.0.0.1:41414';
+// v0.15 zero-setup pairing: the context-memory app publishes its connection
+// details as a credentials.json next to its database. Discovering it by file
+// means no shell configuration, and it works identically in GUI and CLI
+// sessions (GUI apps never source ~/.zshrc — a whole class of 401s v0.14
+// couldn't avoid). Env vars remain as explicit overrides only.
+export function discoverCredentials() {
+  const home = homedir();
+  const candidates = process.env.CONTEXT_MEMORY_CREDENTIALS
+    ? [process.env.CONTEXT_MEMORY_CREDENTIALS] // tests / unusual setups
+    : [
+        // Mac App Store build (sandboxed): inside the app container.
+        join(
+          home,
+          'Library/Containers/app.slova.context-memory/Data/Library/Application Support/context-memory/credentials.json'
+        ),
+        // Developer ID / direct builds.
+        join(home, 'Library/Application Support/context-memory/credentials.json'),
+        // Portable engine (`cm-bench serve` with CM_DB_PATH under ~/.config).
+        join(home, '.config/context-memory/credentials.json'),
+      ];
+  for (const path of candidates) {
+    try {
+      const parsed = JSON.parse(readFileSync(path, 'utf8'));
+      if (typeof parsed?.token === 'string' && parsed.token) {
+        return {
+          token: parsed.token,
+          url: typeof parsed.url === 'string' ? parsed.url : '',
+        };
+      }
+    } catch {
+      // missing or malformed — keep looking; fail open like everything else
+    }
+  }
+  return { token: '', url: '' };
+}
+
+const creds = process.env.CONTEXT_MEMORY_API_KEY ? { token: '', url: '' } : discoverCredentials();
+export const API_KEY = process.env.CONTEXT_MEMORY_API_KEY || creds.token;
+// Default must stay in lockstep with the app's port (EngineConstants).
+export const API_URL =
+  process.env.CONTEXT_MEMORY_API_URL || creds.url || 'http://127.0.0.1:41414';
 
 // Numeric env var with a default; non-numeric or unset falls back.
 export function envNum(name, fallback) {
