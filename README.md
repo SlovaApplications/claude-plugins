@@ -1,53 +1,12 @@
-# Slova Applications — Claude Code plugins
+# context-memory
 
-Plugin marketplace for [Slova Applications](https://slova.app).
+**context-memory is now a Mac app — and the Claude Code plugin ships inside it.**
 
-## Install
+→ **[context-memory.slova.app](https://context-memory.slova.app)**
 
-```
-/plugin marketplace add SlovaApplications/claude-plugins
-```
+Your coding agent's memory, entirely on your Mac: automatic capture and recall
+for Claude Code, powered by on-device search. Nothing leaves your machine.
 
-Then install any of the plugins below with `/plugin install <name>@slova`.
-
-## Plugins
-
-### `context-memory`
-
-Persistent knowledge base for Claude Code sessions. Pre-fetches relevant contexts before every prompt and exposes MCP tools for saving, searching, and synthesizing Topics.
-
-```
-/plugin install context-memory@slova
-```
-
-Then activate it in your current session (no restart needed):
-
-```
-/reload-plugins
-```
-
-**Requires an API key.** The plugin talks to the context-memory backend. Sign up free at <https://context-memory.slova.app/signup/> — with email and a password (confirm via the link we email you), or one click with **Sign up with GitHub**. Either way you land on your account with your API key shown exactly once; export it as `CONTEXT_MEMORY_API_KEY` before launching Claude Code. Keys can be rotated any time from your [account page](https://context-memory.slova.app/account/).
-
-See [`plugins/context-memory/README.md`](plugins/context-memory/README.md) for setup, configuration, and how the prefetch hook works.
-
-Backend service: <https://context-memory.slova.app>
-
-## Development
-
-CI runs on every PR: file hygiene (`.github/workflows/ci.yml`, the
-`pre-commit` job), the Node hook test suite (`Hook tests` job), and full-history
-secret scanning (`.github/workflows/security-scan.yml`). The static checks are
-mirrored locally via [pre-commit](https://pre-commit.com/):
-
-```bash
-pip install pre-commit
-pre-commit install                       # hygiene + gitleaks on commit
-pre-commit install --hook-type pre-push  # trufflehog before every push
-```
-
-Run the hook tests directly with `node plugins/context-memory/tests/run.mjs`
-and `node plugins/context-memory/tests/run-bootstrap.mjs` (Node only — no extra deps).
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+This repository previously hosted the plugin marketplace for the hosted beta.
+It is no longer a distribution channel: installing the app sets up the plugin
+in one step, version-locked to the engine it talks to, with zero configuration.
